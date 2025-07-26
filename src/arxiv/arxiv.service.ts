@@ -6,6 +6,11 @@ import * as xml2js from 'xml2js';
 export class ArxivService {
   private readonly ARXIV_API_URL = 'http://export.arxiv.org/api/query';
 
+  /**
+   * Fetches the title of a paper from ArXiv.
+   * @param arxivId The ArXiv ID of the paper.
+   * @returns A promise that resolves to the paper's title.
+   */
   async fetchPaperTitle(arxivId: string): Promise<string> {
     try {
       const response = await axios.get(this.ARXIV_API_URL, {
@@ -26,5 +31,15 @@ export class ArxivService {
       console.error(`Error fetching paper title for ID ${arxivId}:`, error.message);
       return 'Error fetching title';
     }
+  }
+
+  /**
+   * Retrieves the text of a paper given its ArXiv ID.
+   * For now, this method returns a hardcoded string of dummy text for testing.
+   * @param arxivId The ArXiv ID of the paper.
+   * @returns A promise that resolves to the paper's text.
+   */
+  async getPaperText(arxivId: string): Promise<string> {
+    return 'This paper introduces the Transformer, a novel network architecture...';
   }
 }

@@ -8,6 +8,7 @@ import { Lesson } from './database/entities/lesson.entity';
 import { Progress } from './database/entities/progress.entity';
 import { ArxivModule } from './arxiv/arxiv.module';
 import { PaperModule } from './paper/paper.module';
+import { GenerationModule } from './generation/generation.module';
 
 @Module({
   imports: [
@@ -19,6 +20,7 @@ import { PaperModule } from './paper/paper.module';
     }),
     ArxivModule,
     PaperModule,
+    GenerationModule,
   ],
   controllers: [AppController],
   providers: [AppService],
