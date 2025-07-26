@@ -359,4 +359,128 @@ describe('ArxivService', () => {
       expect(isValid).toBe(false);
     });
   });
+
+  describe('ArXiv URL/ID Parsing', () => {
+    it('should extract ID from various URL formats', () => {
+      const testCases = [
+        ['https://arxiv.org/abs/2507.11768', '2507.11768'],
+        ['http://arxiv.org/abs/2507.11768', '2507.11768'],
+        ['arxiv.org/abs/2507.11768', '2507.11768'],
+        ['https://arxiv.org/pdf/2507.11768.pdf', '2507.11768'],
+        ['https://arxiv.org/abs/math.GT/0309136', 'math.GT/0309136'],
+        ['https://arxiv.org/abs/hep-th/9901001', 'hep-th/9901001'],
+        ['https://arxiv.org/abs/1234.5678v1', '1234.5678v1'],
+      ];
+
+      testCases.forEach(([input, expected]) => {
+        const result = (service as any).extractArxivId(input);
+        expect(result).toBe(expected);
+      });
+    });
+
+    it('should accept valid ArXiv IDs directly', () => {
+      const testCases = [
+        '2507.11768',
+        '1234.5678',
+        '1234.56789',
+        '1234.5678v1',
+        'math.GT/0309136',
+        'hep-th/9901001',
+        'cond-mat.mes-hall/0309136v2',
+      ];
+
+      testCases.forEach((arxivId) => {
+        const result = (service as any).extractArxivId(arxivId);
+        expect(result).toBe(arxivId);
+      });
+    });
+
+    it('should throw error for invalid inputs', () => {
+      const invalidInputs = [
+        '',
+        '   ',
+        'not-an-arxiv-id',
+        'https://example.com/paper',
+        '12345',
+        'abc.def',
+        'https://arxiv.org/invalid/2507.11768',
+      ];
+
+      invalidInputs.forEach((input) => {
+        expect(() => (service as any).extractArxivId(input)).toThrow();
+      });
+    });
+
+    it('should throw error for null or undefined input', () => {
+      expect(() => (service as any).extractArxivId(null)).toThrow('Invalid input: must be a non-empty string');
+      expect(() => (service as any).extractArxivId(undefined)).toThrow('Invalid input: must be a non-empty string');
+    });
+
+    it('should handle URLs with query parameters and fragments', () => {
+      const testCases = [
+        ['https://arxiv.org/abs/2507.11768?context=cs', '2507.11768'],
+        ['https://arxiv.org/abs/2507.11768#section1', '2507.11768'],
+        ['https://arxiv.org/pdf/2507.11768.pdf?download=true', '2507.11768'],
+      ];
+
+      testCases.forEach(([input, expected]) => {
+        const result = (service as any).extractArxivId(input);
+        expect(result).toBe(expected);
+      });
+    });
+  });
+
+  describe('Integration with URL inputs', () => {
+    it('should work with URLs in fetchPaperTitle', async () => {
+      const mockResponse = {
+        data: `<?xml version="1.0" encoding="UTF-8"?>
+        <feed xmlns="http://www.w3.org/2005/Atom">
+          <entry>
+            <title>Test Paper Title</title>
+          </entry>
+        </feed>`,
+      };
+
+      mockedAxios.get.mockResolvedValue(mockResponse);
+
+      const result = await service.fetchPaperTitle('https://arxiv.org/abs/2507.11768');
+      
+      expect(result).toBe('Test Paper Title');
+      expect(mockedAxios.get).toHaveBeenCalledWith(
+        'http://export.arxiv.org/api/query',
+        {
+          params: { id_list: '2507.11768' },
+          responseType: 'text',
+          transformResponse: [expect.any(Function)],
+        }
+      );
+    });
+
+    it('should work with URLs in getPaperText', async () => {
+      const cachedText = 'cached cleaned text from URL test';
+      
+      // Mock text cache exists
+      mockedFs.existsSync.mockImplementation((filePath: any) => {
+        if (filePath.includes('2507.11768.txt')) {
+          return true;
+        }
+        return false;
+      });
+
+      mockedFs.readFileSync.mockImplementation((filePath: any) => {
+        if (filePath.includes('2507.11768.txt')) {
+          return cachedText;
+        }
+        return Buffer.from('mock content');
+      });
+
+      const result = await service.getPaperText('https://arxiv.org/abs/2507.11768');
+      
+      expect(result).toBe(cachedText);
+      expect(mockedFs.readFileSync).toHaveBeenCalledWith(
+        path.join(testTextCacheDir, '2507.11768.txt'),
+        'utf-8'
+      );
+    });
+  });
 });

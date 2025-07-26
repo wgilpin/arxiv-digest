@@ -86,11 +86,58 @@ export class ArxivService {
   }
 
   /**
+   * Extracts ArXiv ID from either a URL or ID string
+   * @param input ArXiv URL (e.g., https://arxiv.org/abs/2507.11768) or ID (e.g., 2507.11768)
+   * @returns The extracted ArXiv ID
+   * @throws Error if the input is not a valid ArXiv URL or ID
+   */
+  private extractArxivId(input: string): string {
+    if (!input || typeof input !== 'string') {
+      throw new Error('Invalid input: must be a non-empty string');
+    }
+
+    const trimmedInput = input.trim();
+
+    // Check if it's a URL
+    if (trimmedInput.includes('arxiv.org')) {
+      // Match various ArXiv URL formats:
+      // https://arxiv.org/abs/2507.11768
+      // http://arxiv.org/abs/2507.11768
+      // arxiv.org/abs/2507.11768
+      // https://arxiv.org/pdf/2507.11768.pdf
+      // https://arxiv.org/abs/math.GT/0309136
+      const urlMatch = trimmedInput.match(/arxiv\.org\/(?:abs|pdf)\/(.+?)(?:\.pdf)?(?:\?|#|$)/i);
+      
+      if (urlMatch && urlMatch[1]) {
+        return urlMatch[1].trim();
+      } else {
+        throw new Error(`Invalid ArXiv URL format: ${input}`);
+      }
+    }
+
+    // If it's not a URL, validate it as an ArXiv ID
+    // ArXiv IDs can be in formats like:
+    // - 2507.11768 (new format: YYMM.NNNNN)
+    // - 1234.5678v1 (with version)
+    // - math.GT/0309136 (old format with subcategory)
+    // - hep-th/9901001 (old format)
+    // - cond-mat.mes-hall/0309136v2 (old format with subcategory and version)
+    const idPattern = /^(?:[a-z-]+(?:\.[a-z-]+)?\/\d{7}(?:v\d+)?|\d{4}\.\d{4,5}(?:v\d+)?)$/i;
+    
+    if (idPattern.test(trimmedInput)) {
+      return trimmedInput;
+    }
+
+    throw new Error(`Invalid ArXiv ID format: ${input}. Expected formats: '2507.11768', 'math.GT/0309136', or ArXiv URL`);
+  }
+
+  /**
    * Fetches the title of a paper from ArXiv.
-   * @param arxivId The ArXiv ID of the paper.
+   * @param arxivInput The ArXiv ID or URL of the paper.
    * @returns A promise that resolves to the paper's title.
    */
-  async fetchPaperTitle(arxivId: string): Promise<string> {
+  async fetchPaperTitle(arxivInput: string): Promise<string> {
+    const arxivId = this.extractArxivId(arxivInput);
     try {
       const response = await axios.get(this.ARXIV_API_URL, {
         params: {
@@ -133,13 +180,14 @@ export class ArxivService {
   }
 
   /**
-   * Retrieves the text of a paper given its ArXiv ID by uploading the PDF directly to Gemini.
+   * Retrieves the text of a paper given its ArXiv ID or URL by uploading the PDF directly to Gemini.
    * Uses Gemini-2.0-flash for PDF text extraction and cleaning.
    * Implements caching for both PDFs and cleaned text.
-   * @param arxivId The ArXiv ID of the paper.
+   * @param arxivInput The ArXiv ID or URL of the paper.
    * @returns A promise that resolves to the paper's text.
    */
-  async getPaperText(arxivId: string): Promise<string> {
+  async getPaperText(arxivInput: string): Promise<string> {
+    const arxivId = this.extractArxivId(arxivInput);
     try {
       const textCachePath = this.getTextCachePath(arxivId);
 
