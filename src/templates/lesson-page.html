@@ -16,10 +16,26 @@
     </div>
     <div class="flex gap-4">
       <a href="/courses/{{courseId}}" class="btn btn-primary">Back to Course</a>
-      <form action="/courses/lessons/{{lessonId}}/complete" method="POST" style="display: inline;">
-        <button type="submit" class="btn btn-success">Mark as Complete</button>
+      <form id="completeForm" action="/courses/lessons/{{lessonId}}/complete" method="POST" style="display: inline;">
+        <button type="submit" id="completeBtn" class="btn btn-success">
+          <span id="completeText">Mark as Complete</span>
+          <span id="completeSpinner" class="loading loading-spinner loading-sm hidden"></span>
+        </button>
       </form>
     </div>
   </div>
+
+  <script>
+    document.getElementById('completeForm').addEventListener('submit', function(e) {
+      const completeBtn = document.getElementById('completeBtn');
+      const completeText = document.getElementById('completeText');
+      const completeSpinner = document.getElementById('completeSpinner');
+      
+      // Show loading state
+      completeBtn.disabled = true;
+      completeText.classList.add('hidden');
+      completeSpinner.classList.remove('hidden');
+    });
+  </script>
 </body>
 </html>]]>

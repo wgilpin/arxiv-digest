@@ -17,12 +17,26 @@
       <div class="card bg-base-100 shadow-xl mb-8">
         <div class="card-body">
           <h2 class="card-title text-2xl mb-4">Create New Course</h2>
-          <form action="/" method="POST" class="form-control">
+          <form id="courseForm" action="/" method="POST" class="form-control">
             <div class="flex gap-4">
               <input type="text" name="arxivId" placeholder="Enter ArXiv ID (e.g., 1706.03762)" required class="input input-bordered flex-1">
-              <button type="submit" class="btn btn-primary">Create Course</button>
+              <button type="submit" id="submitBtn" class="btn btn-primary">
+                <span id="submitText">Create Course</span>
+                <span id="loadingSpinner" class="loading loading-spinner loading-sm hidden"></span>
+              </button>
             </div>
           </form>
+          
+          <!-- Progress Messages -->
+          <div id="progressMessages" class="mt-4 hidden">
+            <div class="alert alert-info">
+              <span class="loading loading-spinner loading-sm"></span>
+              <div>
+                <div class="font-semibold">Processing your paper...</div>
+                <div id="progressText" class="text-sm">This may take up to 2 minutes</div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -35,5 +49,41 @@
       </div>
     </div>
   </div>
+
+  <script>
+    document.getElementById('courseForm').addEventListener('submit', function(e) {
+      const submitBtn = document.getElementById('submitBtn');
+      const submitText = document.getElementById('submitText');
+      const loadingSpinner = document.getElementById('loadingSpinner');
+      const progressMessages = document.getElementById('progressMessages');
+      const progressText = document.getElementById('progressText');
+      
+      // Show loading state
+      submitBtn.disabled = true;
+      submitText.classList.add('hidden');
+      loadingSpinner.classList.remove('hidden');
+      progressMessages.classList.remove('hidden');
+      
+      // Progress messages
+      const messages = [
+        'Downloading paper from ArXiv...',
+        'Extracting text from PDF...',
+        'Analyzing paper content with AI...',
+        'Extracting key concepts...',
+        'Almost done...'
+      ];
+      
+      let messageIndex = 0;
+      const messageInterval = setInterval(() => {
+        if (messageIndex < messages.length) {
+          progressText.textContent = messages[messageIndex];
+          messageIndex++;
+        }
+      }, 15000); // Change message every 15 seconds
+      
+      // Clean up if form submission completes quickly
+      setTimeout(() => clearInterval(messageInterval), 120000); // Stop after 2 minutes
+    });
+  </script>
 </body>
 </html>]]>

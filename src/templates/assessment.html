@@ -12,11 +12,60 @@
   <div class="min-h-screen flex items-center justify-center bg-base-200">
     <div class="card w-96 bg-base-100 shadow-xl p-8">
       <h1 class="text-2xl font-bold mb-4 text-center">Assess Concepts for: {{paperTitle}}</h1>
-      <form action="/{{courseId}}/assess" method="POST" class="form-control">
+      <form id="assessmentForm" action="/{{courseId}}/assess" method="POST" class="form-control">
         {{conceptsHtml}}
-        <button type="submit" class="btn btn-primary mt-4">Submit Assessment</button>
+        <button type="submit" id="assessSubmitBtn" class="btn btn-primary mt-4">
+          <span id="assessSubmitText">Submit Assessment</span>
+          <span id="assessLoadingSpinner" class="loading loading-spinner loading-sm hidden"></span>
+        </button>
       </form>
+      
+      <!-- Progress Messages -->
+      <div id="assessProgressMessages" class="mt-4 hidden">
+        <div class="alert alert-info">
+          <span class="loading loading-spinner loading-sm"></span>
+          <div>
+            <div class="font-semibold">Generating your personalized course...</div>
+            <div id="assessProgressText" class="text-sm">Creating modules and lessons based on your knowledge gaps</div>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
+
+  <script>
+    document.getElementById('assessmentForm').addEventListener('submit', function(e) {
+      const submitBtn = document.getElementById('assessSubmitBtn');
+      const submitText = document.getElementById('assessSubmitText');
+      const loadingSpinner = document.getElementById('assessLoadingSpinner');
+      const progressMessages = document.getElementById('assessProgressMessages');
+      const progressText = document.getElementById('assessProgressText');
+      
+      // Show loading state
+      submitBtn.disabled = true;
+      submitText.classList.add('hidden');
+      loadingSpinner.classList.remove('hidden');
+      progressMessages.classList.remove('hidden');
+      
+      // Progress messages
+      const messages = [
+        'Analyzing your knowledge gaps...',
+        'Generating personalized learning modules...',
+        'Creating lesson content with AI...',
+        'Finalizing your course structure...'
+      ];
+      
+      let messageIndex = 0;
+      const messageInterval = setInterval(() => {
+        if (messageIndex < messages.length) {
+          progressText.textContent = messages[messageIndex];
+          messageIndex++;
+        }
+      }, 10000); // Change message every 10 seconds
+      
+      // Clean up after reasonable time
+      setTimeout(() => clearInterval(messageInterval), 60000);
+    });
+  </script>
 </body>
 </html>]]>
