@@ -15,20 +15,27 @@ export class CourseController {
    * Converts mathematical notation from code tags to LaTeX format for MathJax
    */
   private convertMathCodeToLatex(html: string): string {
-    // Pattern to match code tags containing mathematical notation
-    // Look for variables with subscripts/superscripts, mathematical symbols, etc.
+    // More comprehensive patterns to match various mathematical expressions
     const mathPatterns = [
-      // Variables with subscripts/superscripts: X_1, X_{t+1}, P(H|E), etc.
+      // Mathematical function calls: sin(...), cos(...), PE(...)
+      /(<code>)([a-zA-Z]+\([^<>]*?\))(<\/code>)/g,
+      // Variables with subscripts: X_1, d_model, etc.
+      /(<code>)([A-Za-z]+_[A-Za-z0-9\{\}\+\-]+)(<\/code>)/g,
+      // Variables with superscripts: 10000^(2i/d_model)
+      /(<code>)([A-Za-z0-9]+\^[^<>]*?)(<\/code>)/g,
+      // Complex mathematical expressions with parentheses and operators
+      /(<code>)([A-Za-z0-9_\{\}\^\+\-\*\/\(\)\|\[\]\\>=<\s]*[_\^\(\)][A-Za-z0-9_\{\}\^\+\-\*\/\(\)\|\[\]\\>=<\s]*)(<\/code>)/g,
+      // Variables ending with subscript patterns
       /(<code>)([A-Za-z_\\]+[_{][^<>]*[}]?[^<>]*?)(<\/code>)/g,
-      /(<code>)([A-Za-z]+_[A-Za-z0-9\+\-\{\}]+)(<\/code>)/g,
-      /(<code>)([A-Za-z]+\^[A-Za-z0-9\+\-\{\}]+)(<\/code>)/g,
-      // Mathematical expressions with operators, parentheses, etc.
-      /(<code>)([A-Za-z0-9_\{\}\^\+\-\*\/\(\)\|\[\]\\>=<\s]+[_\^][A-Za-z0-9_\{\}\^\+\-\*\/\(\)\|\[\]\\>=<\s]*)(<\/code>)/g,
-      // Probability notation and functions
+      // Probability notation and expectation
       /(<code>)(E\[[^\]]+\][^<>]*?)(<\/code>)/g,
       /(<code>)(P\([^<>]+\)[^<>]*?)(<\/code>)/g,
-      // Mathematical symbols and operations
+      // Mathematical operations and comparisons
       /(<code>)([A-Za-z]+\s*[>=<]\s*[0-9A-Za-z_]+)(<\/code>)/g,
+      // Single mathematical variables that might be missed
+      /(<code>)([a-z]_[a-zA-Z]+)(<\/code>)/g,
+      // Numbers with exponents
+      /(<code>)([0-9]+\^[^<>]+?)(<\/code>)/g,
     ];
 
     let result = html;
@@ -53,16 +60,26 @@ export class CourseController {
     // Check for mathematical patterns
     const mathIndicators = [
       /_\{?[A-Za-z0-9\+\-]+\}?/, // Subscripts
-      /\^\{?[A-Za-z0-9\+\-]+\}?/, // Superscripts
+      /\^\{?[A-Za-z0-9\+\-\/\(\)]+\}?/, // Superscripts
       /^[A-Za-z]+_[A-Za-z0-9\+\-\{\}]+$/, // Simple variable with subscript
+      /^[a-z]_[a-zA-Z]+$/, // Variables like d_model
       /^E\[/, // Expectation
       /^P\(/, // Probability
+      /^[a-zA-Z]+\(/, // Mathematical functions like sin(, cos(, PE(
       /[>=<]/, // Comparison operators
       /\\mathcal/, // LaTeX commands
       /\\[a-zA-Z]+/, // Other LaTeX commands
+      /[0-9]+\^/, // Numbers with exponents
+      /\([^)]*\/[^)]*\)/, // Fractions in parentheses
+      /pos/, // Common in positional encoding formulas
+      /model/, // d_model is a common variable
     ];
 
-    return mathIndicators.some(pattern => pattern.test(content));
+    // Also check if it contains typical mathematical variable names
+    const mathVariables = ['pos', 'model', 'sin', 'cos', 'PE'];
+    const containsMathVar = mathVariables.some(mathVar => content.includes(mathVar));
+
+    return mathIndicators.some(pattern => pattern.test(content)) || containsMathVar;
   }
 
   @Get('/:id')
