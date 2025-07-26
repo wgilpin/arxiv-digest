@@ -91,19 +91,34 @@ export class CourseController {
       return res.status(404).send('Course not found');
     }
 
+    // Trigger background generation of next module if user is accessing course
+    setImmediate(() => {
+      this.courseService.generateNextModuleInBackground(id).catch(error => {
+        console.error('Background generation failed:', error);
+      });
+    });
+
     let modulesHtml = '';
     if (course.modules && course.modules.length > 0) {
       modulesHtml = course.modules
+        .sort((a, b) => a.orderIndex - b.orderIndex)
         .map(
-          (module: Module) => `
+          (module: Module) => {
+            const hasLessons = module.lessons && module.lessons.length > 0;
+            const isGenerating = !hasLessons;
+            
+            return `
         <div class="collapse collapse-plus bg-base-200 mb-2">
           <input type="checkbox" /> 
           <div class="collapse-title text-xl font-medium">
             ${module.title}
+            ${isGenerating ? '<span class="loading loading-spinner loading-sm ml-2"></span>' : ''}
           </div>
           <div class="collapse-content"> 
+            ${hasLessons ? `
             <ul class="list-disc list-inside">
               ${module.lessons
+                .sort((a, b) => a.orderIndex - b.orderIndex)
                 .map((lesson: Lesson) => {
                   const isCompleted =
                     lesson.progress && lesson.progress.length > 0;
@@ -119,9 +134,16 @@ export class CourseController {
                 })
                 .join('')}
             </ul>
+            ` : `
+            <div class="flex items-center justify-center p-4">
+              <span class="loading loading-spinner loading-md mr-2"></span>
+              <span class="text-gray-500">Generating lessons...</span>
+            </div>
+            `}
           </div>
         </div>
-      `,
+      `;
+          }
         )
         .join('');
     } else {
@@ -137,6 +159,26 @@ export class CourseController {
     res.send(html);
   }
 
+  @Get('/:courseId/modules/:moduleIndex')
+  async getModulePage(@Param('courseId') courseId: number, @Param('moduleIndex') moduleIndex: number, @Res() res: Response) {
+    // Ensure the module exists, generating it if necessary
+    const module = await this.courseService.ensureModuleExists(courseId, moduleIndex);
+    
+    if (!module) {
+      return res.status(404).send('Module not found or invalid module index');
+    }
+
+    // Trigger background generation of next module
+    setImmediate(() => {
+      this.courseService.generateNextModuleInBackground(courseId).catch(error => {
+        console.error('Background generation failed:', error);
+      });
+    });
+
+    // Redirect to course page to show the module
+    res.redirect(`/courses/${courseId}`);
+  }
+
   @Get('/lessons/:id')
   async getLessonPage(@Param('id') id: number, @Res() res: Response) {
     const lesson: Lesson | null = await this.courseService.findLessonById(id);
@@ -144,6 +186,14 @@ export class CourseController {
     if (!lesson) {
       return res.status(404).send('Lesson not found');
     }
+
+    // Trigger background generation of next module when user accesses lessons
+    const courseId = lesson.module.course.id;
+    setImmediate(() => {
+      this.courseService.generateNextModuleInBackground(courseId).catch(error => {
+        console.error('Background generation failed:', error);
+      });
+    });
 
     // Convert markdown to HTML
     let lessonContentHtml = await marked(lesson.content);

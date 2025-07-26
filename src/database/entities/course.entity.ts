@@ -24,6 +24,9 @@ export class Course {
   @Column()
   comprehensionLevel: string;
 
+  @Column({ nullable: true })
+  plannedConcepts: string;
+
   @CreateDateColumn()
   createdAt: Date;
 
