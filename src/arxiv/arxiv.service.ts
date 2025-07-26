@@ -60,7 +60,8 @@ export class ArxivService {
         return false;
       }
       const stats = fs.statSync(cachePath);
-      const ageInDays = (Date.now() - stats.mtime.getTime()) / (1000 * 60 * 60 * 24);
+      const ageInDays =
+        (Date.now() - stats.mtime.getTime()) / (1000 * 60 * 60 * 24);
       return ageInDays < 7; // Cache for 7 days
     } catch {
       return false;
@@ -76,7 +77,8 @@ export class ArxivService {
         return false;
       }
       const stats = fs.statSync(cachePath);
-      const ageInDays = (Date.now() - stats.mtime.getTime()) / (1000 * 60 * 60 * 24);
+      const ageInDays =
+        (Date.now() - stats.mtime.getTime()) / (1000 * 60 * 60 * 24);
       return ageInDays < 7; // Cache for 7 days
     } catch {
       return false;
@@ -140,7 +142,7 @@ export class ArxivService {
   async getPaperText(arxivId: string): Promise<string> {
     try {
       const textCachePath = this.getTextCachePath(arxivId);
-      
+
       // Check if we have cached text
       if (this.isCachedTextValid(textCachePath)) {
         try {
@@ -194,7 +196,9 @@ Return the cleaned, structured text that would be suitable for further analysis.
         }
       }
 
-      return cleanedText || `Unable to extract text from ArXiv paper ${arxivId}`;
+      return (
+        cleanedText || `Unable to extract text from ArXiv paper ${arxivId}`
+      );
     } catch (error) {
       console.error(
         `Error extracting text from ArXiv paper ${arxivId}:`,
@@ -213,7 +217,7 @@ Return the cleaned, structured text that would be suitable for further analysis.
    */
   private async getPdfBuffer(arxivId: string): Promise<Buffer> {
     const pdfCachePath = this.getPdfCachePath(arxivId);
-    
+
     // Check if we have a cached PDF
     if (this.isCachedPdfValid(pdfCachePath)) {
       try {
