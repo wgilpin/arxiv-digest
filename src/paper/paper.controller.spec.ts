@@ -21,6 +21,7 @@ describe('PaperController', () => {
       create: jest.fn(),
       save: jest.fn(),
       findOneBy: jest.fn(),
+      find: jest.fn(),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -191,17 +192,34 @@ describe('PaperController', () => {
     });
   });
 
-  describe('Form Rendering', () => {
-    it('should render paper submission form', () => {
+  describe('Dashboard Rendering', () => {
+    it('should render dashboard with course list', async () => {
+      // Arrange
+      const mockCourses = [
+        {
+          id: 1,
+          paperTitle: 'Test Paper',
+          paperArxivId: '2017.1234',
+          createdAt: new Date('2023-01-01'),
+        },
+      ];
+
+      jest
+        .spyOn(courseRepository, 'find')
+        .mockResolvedValue(mockCourses as Course[]);
+
       // Act
-      controller.getPaperForm(mockResponse as Response);
+      await controller.getDashboard(mockResponse as Response);
 
       // Assert
+      expect(courseRepository.find).toHaveBeenCalledWith({
+        order: { createdAt: 'DESC' },
+      });
       expect(mockResponse.send).toHaveBeenCalledWith(
-        expect.stringContaining('Submit ArXiv ID'),
+        expect.stringContaining('ArXiv Learning Tool - Dashboard'),
       );
       expect(mockResponse.send).toHaveBeenCalledWith(
-        expect.stringContaining('<form action="/" method="POST"'),
+        expect.stringContaining('Test Paper'),
       );
     });
   });

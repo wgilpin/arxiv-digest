@@ -1,0 +1,39 @@
+<![CDATA[<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ArXiv Learning Tool - Dashboard</title>
+  <link href="https://cdn.jsdelivr.net/npm/daisyui@5" rel="stylesheet" type="text/css" />
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+  <link href="https://cdn.jsdelivr.net/npm/daisyui@5/themes.css" rel="stylesheet" type="text/css" />
+</head>
+<body>
+  <div class="min-h-screen bg-base-200">
+    <div class="container mx-auto p-4">
+      <h1 class="text-4xl font-bold text-center mb-8">ArXiv Learning Tool</h1>
+      
+      <!-- Create New Course Section -->
+      <div class="card bg-base-100 shadow-xl mb-8">
+        <div class="card-body">
+          <h2 class="card-title text-2xl mb-4">Create New Course</h2>
+          <form action="/" method="POST" class="form-control">
+            <div class="flex gap-4">
+              <input type="text" name="arxivId" placeholder="Enter ArXiv ID (e.g., 1706.03762)" required class="input input-bordered flex-1">
+              <button type="submit" class="btn btn-primary">Create Course</button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <!-- Existing Courses Section -->
+      <div class="card bg-base-100 shadow-xl">
+        <div class="card-body">
+          <h2 class="card-title text-2xl mb-4">Your Courses</h2>
+          {{coursesHtml}}
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>]]>

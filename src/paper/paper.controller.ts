@@ -27,8 +27,41 @@ export class PaperController {
   ) {}
 
   @Get('/')
-  getPaperForm(@Res() res: Response) {
-    const html = TemplateHelper.renderTemplate('paper-form.html');
+  async getDashboard(@Res() res: Response) {
+    const courses = await this.courseRepository.find({
+      order: { createdAt: 'DESC' },
+    });
+
+    let coursesHtml = '';
+    if (courses.length > 0) {
+      coursesHtml = courses
+        .map(
+          (course) => `
+        <div class="card bg-base-200 shadow-sm mb-4">
+          <div class="card-body">
+            <h3 class="card-title text-lg">${course.paperTitle}</h3>
+            <p class="text-sm text-gray-600 mb-2">ArXiv ID: ${course.paperArxivId}</p>
+            <p class="text-sm text-gray-600 mb-4">Created: ${course.createdAt.toLocaleDateString()}</p>
+            <div class="card-actions justify-end">
+              <a href="/courses/${course.id}" class="btn btn-primary btn-sm">View Course</a>
+            </div>
+          </div>
+        </div>
+      `,
+        )
+        .join('');
+    } else {
+      coursesHtml = `
+        <div class="text-center text-gray-500 py-8">
+          <p class="text-lg mb-2">No courses yet</p>
+          <p>Create your first course by entering an ArXiv ID above!</p>
+        </div>
+      `;
+    }
+
+    const html = TemplateHelper.renderTemplate('dashboard.html', {
+      coursesHtml: coursesHtml,
+    });
     res.send(html);
   }
 

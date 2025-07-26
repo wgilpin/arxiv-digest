@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Res } from '@nestjs/common';
+import { Controller, Get, Post, Param, Res } from '@nestjs/common';
 import { Response } from 'express';
 import { CourseService } from './course.service';
 import { Course } from '../../database/entities/course.entity';
@@ -13,7 +13,7 @@ export class CourseController {
   @Get('/:id')
   async getCoursePage(@Param('id') id: number, @Res() res: Response) {
     const course: Course | null =
-      await this.courseService.findCourseByIdWithRelations(id);
+      await this.courseService.findCourseByIdWithProgress(id);
 
     if (!course) {
       return res.status(404).send('Course not found');
@@ -32,11 +32,19 @@ export class CourseController {
           <div class="collapse-content"> 
             <ul class="list-disc list-inside">
               ${module.lessons
-                .map(
-                  (lesson: Lesson) => `
-                <li><a href="/courses/lessons/${lesson.id}" class="link link-primary">${lesson.title}</a></li>
-              `,
-                )
+                .map((lesson: Lesson) => {
+                  const isCompleted =
+                    lesson.progress && lesson.progress.length > 0;
+                  const completedClass = isCompleted ? 'text-success' : '';
+                  const completedIcon = isCompleted ? '✓ ' : '';
+                  return `
+                <li class="${completedClass}">
+                  <a href="/courses/lessons/${lesson.id}" class="link link-primary ${completedClass}">
+                    ${completedIcon}${lesson.title}
+                  </a>
+                </li>
+              `;
+                })
                 .join('')}
             </ul>
           </div>
@@ -69,7 +77,29 @@ export class CourseController {
       lessonTitle: lesson.title,
       lessonContent: lesson.content,
       courseId: lesson.module.course.id,
+      lessonId: lesson.id,
     });
     res.send(html);
+  }
+
+  @Post('/lessons/:id/complete')
+  async markLessonComplete(
+    @Param('id') lessonId: number,
+    @Res() res: Response,
+  ) {
+    try {
+      await this.courseService.markLessonComplete(lessonId);
+
+      // Get the lesson to find the course ID for redirect
+      const lesson = await this.courseService.findLessonById(lessonId);
+      if (lesson) {
+        res.redirect(`/courses/${lesson.module.course.id}`);
+      } else {
+        res.status(404).send('Lesson not found');
+      }
+    } catch (error) {
+      console.error('Error marking lesson complete:', error);
+      res.status(500).send('Error marking lesson complete');
+    }
   }
 }

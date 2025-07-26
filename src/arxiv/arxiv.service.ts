@@ -18,7 +18,7 @@ export class ArxivService {
           id_list: arxivId,
         },
         responseType: 'text',
-        transformResponse: [(data) => data], // Prevent JSON parsing
+        transformResponse: [(data: string) => data], // Prevent JSON parsing
       });
 
       const parser = new xml2js.Parser({ explicitArray: false });

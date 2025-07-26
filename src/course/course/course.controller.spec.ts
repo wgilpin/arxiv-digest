@@ -19,7 +19,9 @@ describe('CourseController', () => {
           provide: CourseService,
           useValue: {
             findCourseByIdWithRelations: jest.fn(),
+            findCourseByIdWithProgress: jest.fn(),
             findLessonById: jest.fn(),
+            markLessonComplete: jest.fn(),
           },
         },
       ],
@@ -68,14 +70,14 @@ describe('CourseController', () => {
       } as Course;
 
       jest
-        .spyOn(courseService, 'findCourseByIdWithRelations')
+        .spyOn(courseService, 'findCourseByIdWithProgress')
         .mockResolvedValue(mockCourse);
 
       // Act
       await controller.getCoursePage(courseId, mockResponse as Response);
 
       // Assert
-      expect(courseService.findCourseByIdWithRelations).toHaveBeenCalledWith(
+      expect(courseService.findCourseByIdWithProgress).toHaveBeenCalledWith(
         courseId,
       );
       expect(mockResponse.send).toHaveBeenCalledWith(
@@ -112,7 +114,7 @@ describe('CourseController', () => {
       } as Course;
 
       jest
-        .spyOn(courseService, 'findCourseByIdWithRelations')
+        .spyOn(courseService, 'findCourseByIdWithProgress')
         .mockResolvedValue(mockCourse);
 
       // Act

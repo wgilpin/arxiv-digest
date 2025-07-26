@@ -4,6 +4,7 @@ import { Repository } from 'typeorm';
 import { Course } from '../../database/entities/course.entity';
 import { Module as CourseModuleEntity } from '../../database/entities/module.entity';
 import { Lesson } from '../../database/entities/lesson.entity';
+import { Progress } from '../../database/entities/progress.entity';
 import { GenerationService } from '../../generation/generation/generation.service';
 
 @Injectable()
@@ -15,6 +16,8 @@ export class CourseService {
     private moduleRepository: Repository<CourseModuleEntity>,
     @InjectRepository(Lesson)
     private lessonRepository: Repository<Lesson>,
+    @InjectRepository(Progress)
+    private progressRepository: Repository<Progress>,
     private generationService: GenerationService,
   ) {}
 
@@ -66,6 +69,28 @@ export class CourseService {
     return this.lessonRepository.findOne({
       where: { id },
       relations: ['module', 'module.course'],
+    });
+  }
+
+  async markLessonComplete(lessonId: number): Promise<void> {
+    // Check if progress already exists for this lesson
+    const existingProgress = await this.progressRepository.findOne({
+      where: { lessonId },
+    });
+
+    if (!existingProgress) {
+      const progress = this.progressRepository.create({
+        lessonId,
+        readAt: new Date(),
+      });
+      await this.progressRepository.save(progress);
+    }
+  }
+
+  async findCourseByIdWithProgress(id: number): Promise<Course | null> {
+    return this.courseRepository.findOne({
+      where: { id },
+      relations: ['modules', 'modules.lessons', 'modules.lessons.progress'],
     });
   }
 }

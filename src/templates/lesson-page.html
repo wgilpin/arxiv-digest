@@ -14,7 +14,12 @@
     <div class="card bg-base-100 shadow-xl p-8 mb-4">
       <p class="prose">{{lessonContent}}</p>
     </div>
-    <a href="/courses/{{courseId}}" class="btn btn-primary">Back to Course</a>
+    <div class="flex gap-4">
+      <a href="/courses/{{courseId}}" class="btn btn-primary">Back to Course</a>
+      <form action="/courses/lessons/{{lessonId}}/complete" method="POST" style="display: inline;">
+        <button type="submit" class="btn btn-success">Mark as Complete</button>
+      </form>
+    </div>
   </div>
 </body>
 </html>]]>
