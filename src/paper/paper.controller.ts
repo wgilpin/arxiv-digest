@@ -1,10 +1,11 @@
-import { Controller, Get, Post, Body, Res, Inject, Param } from '@nestjs/common';
+import { Controller, Get, Post, Body, Res, Param } from '@nestjs/common';
 import { Response } from 'express';
 import { ArxivService } from '../arxiv/arxiv.service';
 import { GenerationService } from '../generation/generation/generation.service';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Course } from '../database/entities/course.entity';
+import { CourseService } from '../course/course/course.service';
 
 @Controller('paper')
 export class PaperController {
@@ -13,6 +14,7 @@ export class PaperController {
     private readonly generationService: GenerationService,
     @InjectRepository(Course)
     private courseRepository: Repository<Course>,
+    private readonly courseService: CourseService,
   ) {}
 
   @Get('/')
@@ -31,7 +33,8 @@ export class PaperController {
   async createCourse(@Body('arxivId') arxivId: string, @Res() res: Response) {
     const paperTitle = await this.arxivService.fetchPaperTitle(arxivId);
     const paperText = await this.arxivService.getPaperText(arxivId);
-    const extractedConcepts = await this.generationService.extractConcepts(paperText);
+    const extractedConcepts =
+      await this.generationService.extractConcepts(paperText);
 
     const newCourse = this.courseRepository.create({
       paperArxivId: arxivId,
@@ -55,7 +58,9 @@ export class PaperController {
 
     let conceptsHtml = '';
     if (course.extractedConcepts && course.extractedConcepts.length > 0) {
-      conceptsHtml = course.extractedConcepts.map(concept => `
+      conceptsHtml = course.extractedConcepts
+        .map(
+          (concept) => `
         <div>
           <label>${concept}:</label>
           <select name="rating-${concept}">
@@ -66,7 +71,9 @@ export class PaperController {
             <option value="5">5</option>
           </select>
         </div>
-      `).join('');
+      `,
+        )
+        .join('');
     } else {
       conceptsHtml = '<p>No concepts extracted for this paper.</p>';
     }
@@ -78,5 +85,24 @@ export class PaperController {
         <button type="submit">Submit Assessment</button>
       </form>
     `);
+  }
+
+  @Post('/:id/assess')
+  async submitAssessment(
+    @Param('id') id: number,
+    @Body() body: Record<string, string>,
+    @Res() res: Response,
+  ) {
+    const ratings: Record<string, number> = {};
+    for (const key in body) {
+      if (key.startsWith('rating-')) {
+        const conceptName = key.replace('rating-', '');
+        ratings[conceptName] = parseInt(body[key], 10);
+      }
+    }
+
+    await this.courseService.generateSyllabus(id, ratings);
+
+    res.redirect(`/courses/${id}`);
   }
 }

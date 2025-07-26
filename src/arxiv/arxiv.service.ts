@@ -28,7 +28,10 @@ export class ArxivService {
       }
       return 'Title not found';
     } catch (error) {
-      console.error(`Error fetching paper title for ID ${arxivId}:`, error.message);
+      console.error(
+        `Error fetching paper title for ID ${arxivId}:`,
+        error.message,
+      );
       return 'Error fetching title';
     }
   }

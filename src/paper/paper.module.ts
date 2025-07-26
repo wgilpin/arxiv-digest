@@ -5,9 +5,15 @@ import { ArxivService } from '../arxiv/arxiv.service';
 import { Course } from '../database/entities/course.entity';
 import { ArxivModule } from '../arxiv/arxiv.module';
 import { GenerationModule } from '../generation/generation.module';
+import { CourseModule } from '../course/course.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Course]), ArxivModule, GenerationModule],
+  imports: [
+    TypeOrmModule.forFeature([Course]),
+    ArxivModule,
+    GenerationModule,
+    CourseModule,
+  ],
   controllers: [PaperController],
   providers: [ArxivService],
 })

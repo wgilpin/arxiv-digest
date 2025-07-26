@@ -1,4 +1,10 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, ManyToOne } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  CreateDateColumn,
+  ManyToOne,
+} from 'typeorm';
 import { Lesson } from './lesson.entity';
 
 @Entity()
@@ -12,6 +18,6 @@ export class Progress {
   @CreateDateColumn()
   readAt: Date;
 
-  @ManyToOne(() => Lesson, lesson => lesson.progress)
+  @ManyToOne(() => Lesson, (lesson) => lesson.progress)
   lesson: Lesson;
 }

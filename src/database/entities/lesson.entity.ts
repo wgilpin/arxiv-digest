@@ -1,4 +1,10 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, OneToMany } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  ManyToOne,
+  OneToMany,
+} from 'typeorm';
 import { Module } from './module.entity';
 import { Progress } from './progress.entity';
 
@@ -16,9 +22,9 @@ export class Lesson {
   @Column()
   orderIndex: number;
 
-  @ManyToOne(() => Module, module => module.lessons)
+  @ManyToOne(() => Module, (module) => module.lessons)
   module: Module;
 
-  @OneToMany(() => Progress, progress => progress.lesson)
+  @OneToMany(() => Progress, (progress) => progress.lesson)
   progress: Progress[];
 }
