@@ -66,22 +66,39 @@ Key relationships:
 
 ### ArXiv Integration
 - Uses ArXiv API (`http://export.arxiv.org/api/query`) for metadata
-- Paper text extraction currently returns placeholder (real PDF parsing not implemented)
-- ArxivService handles API communication and XML parsing
+- Downloads and parses actual PDFs from `https://arxiv.org/pdf/{id}.pdf`
+- Uses Gemini-2.0-flash for PDF text cleaning and structuring
+- ArxivService handles API communication, PDF processing, and XML parsing
 
 ### Database Configuration
 - SQLite database file: `database.sqlite` (in project root)
 - TypeORM synchronization enabled in development
 - Entities defined in `src/database/entities/`
 
+### LLM Integration (Gemini)
+- **Gemini-2.0-flash**: Used for PDF text extraction and cleaning
+- **Gemini-2.5-flash**: Used for concept extraction and lesson generation
+- Requires `GEMINI_API_KEY` environment variable
+- Comprehensive fallback handling for API failures
+
 ### Frontend Approach
 - Server-rendered HTML pages (no separate frontend framework)
 - DaisyUI + Tailwind CSS for styling
+- Template system with `TemplateHelper` for variable substitution
 - Forms and navigation handled through NestJS controllers
 
 ## Development Notes
 
 - The project follows NestJS module pattern with clear separation of concerns
-- LLM integration planned but may use placeholder responses during development
+- Real Gemini LLM integration for all AI features
 - Database synchronization is enabled, so schema changes auto-apply
+- Comprehensive error handling and fallbacks for all external APIs
 - Main application entry point: `src/main.ts` (runs on port 3000)
+
+## Environment Variables
+
+Required environment variables:
+```bash
+GEMINI_API_KEY=your_gemini_api_key_here
+PORT=3000  # Optional, defaults to 3000
+```
