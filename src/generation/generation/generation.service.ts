@@ -170,10 +170,12 @@ Make the content engaging, informative, and approximately 400-600 words.
 
       const content = contentMatch ? contentMatch[1].trim() : response; // Use full response as content if parsing fails
 
+      const processedContent = this.escapeLatexInMath(content);
+
       return {
         title,
         content:
-          content ||
+          processedContent ||
           `This lesson covers the fundamental concepts and applications of ${concept}. It provides a comprehensive introduction to help you understand this important topic in the field.`,
       };
     } catch (error) {
@@ -185,5 +187,26 @@ Make the content engaging, informative, and approximately 400-600 words.
         content: `This lesson provides an introduction to ${concept}, covering its key principles, applications, and importance in the field. Understanding ${concept} is essential for grasping more advanced topics and practical applications in this domain.`,
       };
     }
+  }
+
+  private escapeLatexInMath(text: string): string {
+    if (!text) {
+      return '';
+    }
+    // This function escapes backslashes within LaTeX delimiters ($...$ and $$...$$)
+    // to prevent markdown processors from interfering with LaTeX commands.
+    let result = text.replace(
+      /\$(.*?)\$/g,
+      (match: string, content: string) => {
+        return `$${content.replace(/\\/g, '\\\\')}$`;
+      },
+    );
+    result = result.replace(
+      /\$\$(.*?)\$\$/gs,
+      (match: string, content: string) => {
+        return `$$${content.replace(/\\/g, '\\\\')}$$`;
+      },
+    );
+    return result;
   }
 }

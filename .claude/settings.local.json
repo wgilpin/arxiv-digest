@@ -5,7 +5,8 @@
       "Bash(npm run build:*)",
       "Bash(npm test)",
       "Bash(git add:*)",
-      "Bash(npm install:*)"
+      "Bash(npm install:*)",
+      "Bash(sqlite3:*)"
     ],
     "deny": []
   }

@@ -7,6 +7,19 @@
   <link href="https://cdn.jsdelivr.net/npm/daisyui@5" rel="stylesheet" type="text/css" />
   <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
   <link href="https://cdn.jsdelivr.net/npm/daisyui@5/themes.css" rel="stylesheet" type="text/css" />
+  <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+  <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+  <script>
+    MathJax = {
+      tex: {
+        inlineMath: [['$', '$'], ['\\(', '\\)']],
+        displayMath: [['$$', '$$'], ['\\[', '\\]']]
+      },
+      svg: {
+        fontCache: 'global'
+      }
+    };
+  </script>
   <style>
     .lesson-content h1, .lesson-content h2, .lesson-content h3 { 
       margin-top: 1.5rem; 
@@ -36,6 +49,16 @@
       padding-left: 1rem; 
       margin: 1rem 0; 
       font-style: italic; 
+    }
+    .lesson-content .MathJax {
+      font-size: 1.1em !important;
+    }
+    .lesson-content mjx-container[jax="CHTML"] {
+      line-height: 1.4;
+    }
+    p {
+      margin-bottom: 1em;
+      line-height: 1.6;
     }
   </style>
 </head>
@@ -67,6 +90,14 @@
       completeText.classList.add('hidden');
       completeSpinner.classList.remove('hidden');
     });
+
+    // Ensure MathJax processes the content after the page loads
+    window.MathJax = window.MathJax || {};
+    window.MathJax.startup = window.MathJax.startup || {};
+    window.MathJax.startup.ready = () => {
+      MathJax.startup.defaultReady();
+      MathJax.typesetPromise();
+    };
   </script>
 </body>
 </html>]]>
