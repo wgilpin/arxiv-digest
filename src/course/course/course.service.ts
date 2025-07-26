@@ -45,16 +45,22 @@ export class CourseService {
       });
       await this.moduleRepository.save(newModule);
 
-      const lessonContent =
-        await this.generationService.generateLessonContent(concept);
+      // Generate lesson topics for this concept
+      const lessonTopics = await this.generationService.generateLessonTopics(concept);
 
-      const newLesson = this.lessonRepository.create({
-        title: lessonContent.title,
-        content: lessonContent.content,
-        orderIndex: 0, // Assuming one lesson per module for now
-        module: newModule,
-      });
-      await this.lessonRepository.save(newLesson);
+      // Create multiple lessons for this module
+      let lessonOrderIndex = 0;
+      for (const topic of lessonTopics) {
+        const lessonContent = await this.generationService.generateLessonContent(concept, topic);
+
+        const newLesson = this.lessonRepository.create({
+          title: lessonContent.title,
+          content: lessonContent.content,
+          orderIndex: lessonOrderIndex++,
+          module: newModule,
+        });
+        await this.lessonRepository.save(newLesson);
+      }
     }
   }
 

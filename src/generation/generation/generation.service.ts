@@ -116,28 +116,118 @@ ${paperText.slice(0, 30000)} // Limit to avoid token limits
   }
 
   /**
-   * Generates comprehensive lesson content for a given concept using Gemini-2.5-flash.
-   * @param concept The concept for which to generate lesson content.
-   * @returns A promise that resolves to an object containing the lesson title and content.
+   * Generates a list of lesson topics for a given concept, breaking it down into 2-3 minute lessons.
+   * @param concept The concept to break down into lesson topics.
+   * @returns A promise that resolves to an array of lesson topic strings.
    */
-  async generateLessonContent(
-    concept: string,
-  ): Promise<{ title: string; content: string }> {
+  async generateLessonTopics(concept: string): Promise<string[]> {
     try {
       const model = this.genAI.getGenerativeModel({
         model: 'gemini-2.5-flash',
       });
 
       const prompt = `
-Create a comprehensive educational lesson about the concept: "${concept}"
+Break down the concept "${concept}" into 3-5 specific lesson topics that can each be taught in 2-3 minutes.
 
-The lesson should be suitable for someone learning this concept for the first time, but assume they have a basic technical background.
+Each lesson should focus on a specific sub-topic or aspect of the main concept. Think of how you would structure a short video series or tutorial sequence.
+
+Requirements:
+- Each lesson should be focused on 1-2 specific aspects
+- Content should be digestible in 2-3 minutes of reading
+- Topics should build logically on each other
+- Avoid overlap between lessons
+- Make topics specific and actionable
+
+IMPORTANT: Return ONLY a valid JSON array of strings. Do not include any markdown formatting, explanations, or code blocks. Just the raw JSON array.
+
+Example format:
+["Introduction and Definition", "Core Principles", "Implementation Details", "Common Applications", "Best Practices"]
+
+Concept: ${concept}
+`;
+
+      const result = await model.generateContent(prompt);
+      const response = result.response.text();
+
+      // Try to parse JSON response (handle markdown code blocks)
+      try {
+        let jsonString = response.trim();
+        const jsonMatch = jsonString.match(
+          /```(?:json)?\s*(\[[\s\S]*?\])\s*```/,
+        );
+        if (jsonMatch) {
+          jsonString = jsonMatch[1];
+        } else if (jsonString.startsWith('```') && jsonString.endsWith('```')) {
+          jsonString = jsonString
+            .slice(3, -3)
+            .replace(/^json\s*/, '')
+            .trim();
+        }
+
+        const topics = JSON.parse(jsonString) as unknown[];
+        if (Array.isArray(topics) && topics.length > 0) {
+          return (topics as string[]).slice(0, 5); // Limit to 5 lessons max per module
+        }
+      } catch (parseError) {
+        console.error('Failed to parse lesson topics JSON:', parseError);
+      }
+
+      // Fallback: provide generic breakdown
+      return [
+        `Introduction to ${concept}`,
+        `Core Principles of ${concept}`,
+        `Applications of ${concept}`,
+        `Advanced Aspects of ${concept}`,
+      ];
+    } catch (error) {
+      console.error(`Error generating lesson topics for ${concept}:`, error);
+      
+      // Fallback topics
+      return [
+        `Introduction to ${concept}`,
+        `Understanding ${concept}`,
+        `Practical Applications`,
+      ];
+    }
+  }
+
+  /**
+   * Generates focused lesson content for a specific topic, designed for 2-3 minute reading.
+   * @param concept The main concept this lesson belongs to.
+   * @param topic The specific topic for this lesson.
+   * @returns A promise that resolves to an object containing the lesson title and content.
+   */
+  async generateLessonContent(
+    concept: string,
+    topic?: string,
+  ): Promise<{ title: string; content: string }> {
+    try {
+      const model = this.genAI.getGenerativeModel({
+        model: 'gemini-2.5-flash',
+      });
+
+      const lessonFocus = topic || concept;
+      const isTopicSpecific = !!topic;
+      
+      const prompt = `
+Create a ${isTopicSpecific ? 'focused' : 'comprehensive'} educational lesson about ${isTopicSpecific ? `the topic: "${topic}" (part of the broader concept: "${concept}")` : `the concept: "${concept}"`}
+
+The lesson should be suitable for someone learning this ${isTopicSpecific ? 'topic' : 'concept'} for the first time, but assume they have a basic technical background.
+
+${isTopicSpecific ? 'IMPORTANT: This lesson should be focused, concise, and readable in 2-3 minutes. Focus ONLY on the specific topic provided, not the entire concept.' : ''}
 
 Please structure your response as follows:
 TITLE: [A clear, engaging title for the lesson]
 
 CONTENT:
-[Write the lesson content in well-formatted Markdown. Include:]
+[Write the lesson content in well-formatted Markdown. ${isTopicSpecific ? 'For this focused lesson, include:' : 'Include:'}]
+${isTopicSpecific ? `
+- Clear definition/explanation of this specific topic
+- Why this topic matters within the broader concept
+- Key points or principles for this topic
+- Brief practical example or application
+- How this topic connects to the overall concept
+` : `
 - Clear definition and explanation of the concept
 - Why this concept is important  
 - Key principles or components
@@ -145,16 +235,17 @@ CONTENT:
 - How it relates to other concepts in the field
 - Common misconceptions or challenges
 - Further learning resources
+`}
 
 Use proper Markdown formatting:
 - **Bold** for important terms and section headers
 - *Italics* for emphasis
-- \`code\` for technical terms
+- \`code\` for technical terms, variables, and mathematical notation
 - Bullet points for lists
 - Code blocks for examples
 - ## for section headers
 
-Make the content engaging, informative, and approximately 400-600 words.
+Make the content engaging, informative, and approximately ${isTopicSpecific ? '200-350 words (2-3 minute read)' : '400-600 words'}.
 `;
 
       const result = await model.generateContent(prompt);
@@ -166,7 +257,7 @@ Make the content engaging, informative, and approximately 400-600 words.
 
       const title = titleMatch
         ? titleMatch[1].trim()
-        : `Understanding ${concept}`;
+        : `Understanding ${topic || concept}`;
 
       const content = contentMatch ? contentMatch[1].trim() : response; // Use full response as content if parsing fails
 
@@ -176,15 +267,15 @@ Make the content engaging, informative, and approximately 400-600 words.
         title,
         content:
           processedContent ||
-          `This lesson covers the fundamental concepts and applications of ${concept}. It provides a comprehensive introduction to help you understand this important topic in the field.`,
+          `This lesson covers ${topic ? `the topic of ${topic} within ${concept}` : `the fundamental concepts and applications of ${concept}`}. It provides ${topic ? 'a focused introduction' : 'a comprehensive introduction'} to help you understand this important ${topic ? 'topic' : 'concept'} in the field.`,
       };
     } catch (error) {
       console.error(`Error generating lesson content for ${concept}:`, error);
 
       // Fallback content
       return {
-        title: `Introduction to ${concept}`,
-        content: `This lesson provides an introduction to ${concept}, covering its key principles, applications, and importance in the field. Understanding ${concept} is essential for grasping more advanced topics and practical applications in this domain.`,
+        title: `Introduction to ${topic || concept}`,
+        content: `This lesson provides an introduction to ${topic || concept}, covering its key principles, applications, and importance in the field. Understanding ${topic || concept} is essential for grasping more advanced topics and practical applications in this domain.`,
       };
     }
   }
