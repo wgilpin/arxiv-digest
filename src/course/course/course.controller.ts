@@ -3,6 +3,7 @@ import { Response } from 'express';
 import { CourseService } from './course.service';
 import { Course } from '../../database/entities/course.entity';
 import { Lesson } from '../../database/entities/lesson.entity';
+import { Module } from '../../database/entities/module.entity';
 
 @Controller('courses')
 export class CourseController {
@@ -21,27 +22,53 @@ export class CourseController {
     if (course.modules && course.modules.length > 0) {
       modulesHtml = course.modules
         .map(
-          (module) => `
-        <h2>${module.title}</h2>
-        <ul>
-          ${module.lessons
-            .map(
-              (lesson) => `
-            <li><a href="/lessons/${lesson.id}">${lesson.title}</a></li>
-          `,
-            )
-            .join('')}
-        </ul>
+          (module: Module) => `
+        <div class="collapse collapse-plus bg-base-200 mb-2">
+          <input type="checkbox" /> 
+          <div class="collapse-title text-xl font-medium">
+            ${module.title}
+          </div>
+          <div class="collapse-content"> 
+            <ul class="list-disc list-inside">
+              ${module.lessons
+                .map(
+                  (lesson: Lesson) => `
+                <li><a href="/lessons/${lesson.id}" class="link link-primary">${lesson.title}</a></li>
+              `,
+                )
+                .join('')}
+            </ul>
+          </div>
+        </div>
       `,
         )
         .join('');
     } else {
-      modulesHtml = '<p>No modules found for this course.</p>';
+      modulesHtml = `
+        <p class="text-center text-gray-500">No modules found for this course.</p>
+      `;
     }
 
     res.send(`
-      <h1>Course: ${course.paperTitle}</h1>
-      ${modulesHtml}
+      <![CDATA[<!DOCTYPE html>
+      <html lang="en">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Course: ${course.paperTitle}</title>
+        <link href="https://cdn.jsdelivr.net/npm/daisyui@5" rel="stylesheet" type="text/css" />
+        <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+        <link href="https://cdn.jsdelivr.net/npm/daisyui@5/themes.css" rel="stylesheet" type="text/css" />
+      </head>
+      <body>
+        <div class="container mx-auto p-4">
+          <h1 class="text-3xl font-bold mb-6 text-center">Course: ${course.paperTitle}</h1>
+          <div class="space-y-4">
+            ${modulesHtml}
+          </div>
+        </div>
+      </body>
+      </html>]]>
     `);
   }
 
@@ -54,9 +81,26 @@ export class CourseController {
     }
 
     res.send(`
-      <h1>${lesson.title}</h1>
-      <p>${lesson.content}</p>
-      <a href="/courses/${lesson.module.course.id}">Back to Course</a>
+      <![CDATA[<!DOCTYPE html>
+      <html lang="en">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>${lesson.title}</title>
+        <link href="https://cdn.jsdelivr.net/npm/daisyui@5" rel="stylesheet" type="text/css" />
+        <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+        <link href="https://cdn.jsdelivr.net/npm/daisyui@5/themes.css" rel="stylesheet" type="text/css" />
+      </head>
+      <body>
+        <div class="container mx-auto p-4">
+          <h1 class="text-3xl font-bold mb-4">${lesson.title}</h1>
+          <div class="card bg-base-100 shadow-xl p-8 mb-4">
+            <p class="prose">${lesson.content}</p>
+          </div>
+          <a href="/courses/${lesson.module.course.id}" class="btn btn-primary">Back to Course</a>
+        </div>
+      </body>
+      </html>]]>
     `);
   }
 }
