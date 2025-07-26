@@ -1,7 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import axios from 'axios';
 import * as xml2js from 'xml2js';
-import * as pdfParse from 'pdf-parse';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
 @Injectable()
@@ -61,8 +60,8 @@ export class ArxivService {
   }
 
   /**
-   * Retrieves the text of a paper given its ArXiv ID by downloading and parsing the PDF.
-   * Uses Gemini-2.0-flash for enhanced text extraction.
+   * Retrieves the text of a paper given its ArXiv ID by uploading the PDF directly to Gemini.
+   * Uses Gemini-2.0-flash for PDF text extraction and cleaning.
    * @param arxivId The ArXiv ID of the paper.
    * @returns A promise that resolves to the paper's text.
    */
@@ -75,30 +74,38 @@ export class ArxivService {
         timeout: 30000, // 30 second timeout
       });
 
-      // Parse PDF to extract raw text
       const pdfBuffer = Buffer.from(response.data as ArrayBuffer);
-      const pdfData = await pdfParse(pdfBuffer);
-      const rawText = pdfData.text;
 
-      // Use Gemini-2.0-flash to clean and structure the text
+      // Upload PDF directly to Gemini for text extraction and cleaning
       const model = this.genAI.getGenerativeModel({
         model: 'gemini-2.0-flash-exp',
       });
 
       const prompt = `
-Please clean and structure this raw PDF text from an academic paper. 
-Remove page numbers, headers, footers, and formatting artifacts.
-Preserve the logical structure including sections, paragraphs, and important content.
-Make it readable while maintaining all the technical content.
+Extract and clean the text from this academic paper PDF. 
+Please:
+- Extract all the text content from the PDF
+- Remove page numbers, headers, footers, and formatting artifacts
+- Preserve the logical structure including sections, paragraphs, and important content
+- Make it readable while maintaining all the technical content
+- Ensure mathematical formulas and technical terms are preserved
 
-Raw text:
-${rawText.slice(0, 50000)} // Limit to first 50k chars to avoid token limits
+Return the cleaned, structured text that would be suitable for further analysis.
 `;
 
-      const result = await model.generateContent(prompt);
+      const result = await model.generateContent([
+        prompt,
+        {
+          inlineData: {
+            data: pdfBuffer.toString('base64'),
+            mimeType: 'application/pdf',
+          },
+        },
+      ]);
+
       const cleanedText = result.response.text();
 
-      return cleanedText || rawText; // Fallback to raw text if cleaning fails
+      return cleanedText || `Unable to extract text from ArXiv paper ${arxivId}`;
     } catch (error) {
       console.error(
         `Error extracting text from ArXiv paper ${arxivId}:`,
