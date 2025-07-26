@@ -137,16 +137,24 @@ Please structure your response as follows:
 TITLE: [A clear, engaging title for the lesson]
 
 CONTENT:
-[Comprehensive lesson content that includes:]
+[Write the lesson content in well-formatted Markdown. Include:]
 - Clear definition and explanation of the concept
-- Why this concept is important
+- Why this concept is important  
 - Key principles or components
 - Real-world applications or examples
 - How it relates to other concepts in the field
 - Common misconceptions or challenges
 - Further learning resources
 
-Make the content engaging, informative, and approximately 300-500 words.
+Use proper Markdown formatting:
+- **Bold** for important terms and section headers
+- *Italics* for emphasis
+- \`code\` for technical terms
+- Bullet points for lists
+- Code blocks for examples
+- ## for section headers
+
+Make the content engaging, informative, and approximately 400-600 words.
 `;
 
       const result = await model.generateContent(prompt);

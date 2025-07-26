@@ -5,6 +5,7 @@ import { Course } from '../../database/entities/course.entity';
 import { Lesson } from '../../database/entities/lesson.entity';
 import { Module } from '../../database/entities/module.entity';
 import { TemplateHelper } from '../../templates/template-helper';
+import { marked } from 'marked';
 
 @Controller('courses')
 export class CourseController {
@@ -73,9 +74,12 @@ export class CourseController {
       return res.status(404).send('Lesson not found');
     }
 
+    // Convert markdown to HTML
+    const lessonContentHtml = await marked(lesson.content);
+    
     const html = TemplateHelper.renderTemplate('lesson-page.html', {
       lessonTitle: lesson.title,
-      lessonContent: lesson.content,
+      lessonContent: lessonContentHtml,
       courseId: lesson.module.course.id,
       lessonId: lesson.id,
     });
