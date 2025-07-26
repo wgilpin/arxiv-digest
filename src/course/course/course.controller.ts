@@ -4,6 +4,7 @@ import { CourseService } from './course.service';
 import { Course } from '../../database/entities/course.entity';
 import { Lesson } from '../../database/entities/lesson.entity';
 import { Module } from '../../database/entities/module.entity';
+import { TemplateHelper } from '../../templates/template-helper';
 
 @Controller('courses')
 export class CourseController {
@@ -33,7 +34,7 @@ export class CourseController {
               ${module.lessons
                 .map(
                   (lesson: Lesson) => `
-                <li><a href="/lessons/${lesson.id}" class="link link-primary">${lesson.title}</a></li>
+                <li><a href="/courses/lessons/${lesson.id}" class="link link-primary">${lesson.title}</a></li>
               `,
                 )
                 .join('')}
@@ -49,27 +50,11 @@ export class CourseController {
       `;
     }
 
-    res.send(`
-      <![CDATA[<!DOCTYPE html>
-      <html lang="en">
-      <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Course: ${course.paperTitle}</title>
-        <link href="https://cdn.jsdelivr.net/npm/daisyui@5" rel="stylesheet" type="text/css" />
-        <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
-        <link href="https://cdn.jsdelivr.net/npm/daisyui@5/themes.css" rel="stylesheet" type="text/css" />
-      </head>
-      <body>
-        <div class="container mx-auto p-4">
-          <h1 class="text-3xl font-bold mb-6 text-center">Course: ${course.paperTitle}</h1>
-          <div class="space-y-4">
-            ${modulesHtml}
-          </div>
-        </div>
-      </body>
-      </html>]]>
-    `);
+    const html = TemplateHelper.renderTemplate('course-page.html', {
+      paperTitle: course.paperTitle,
+      modulesHtml: modulesHtml,
+    });
+    res.send(html);
   }
 
   @Get('/lessons/:id')
@@ -80,27 +65,11 @@ export class CourseController {
       return res.status(404).send('Lesson not found');
     }
 
-    res.send(`
-      <![CDATA[<!DOCTYPE html>
-      <html lang="en">
-      <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>${lesson.title}</title>
-        <link href="https://cdn.jsdelivr.net/npm/daisyui@5" rel="stylesheet" type="text/css" />
-        <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
-        <link href="https://cdn.jsdelivr.net/npm/daisyui@5/themes.css" rel="stylesheet" type="text/css" />
-      </head>
-      <body>
-        <div class="container mx-auto p-4">
-          <h1 class="text-3xl font-bold mb-4">${lesson.title}</h1>
-          <div class="card bg-base-100 shadow-xl p-8 mb-4">
-            <p class="prose">${lesson.content}</p>
-          </div>
-          <a href="/courses/${lesson.module.course.id}" class="btn btn-primary">Back to Course</a>
-        </div>
-      </body>
-      </html>]]>
-    `);
+    const html = TemplateHelper.renderTemplate('lesson-page.html', {
+      lessonTitle: lesson.title,
+      lessonContent: lesson.content,
+      courseId: lesson.module.course.id,
+    });
+    res.send(html);
   }
 }

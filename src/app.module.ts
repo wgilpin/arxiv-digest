@@ -1,7 +1,5 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { AppController } from './app.controller';
-import { AppService } from './app.service';
 import { Course } from './database/entities/course.entity';
 import { Module as LearningModule } from './database/entities/module.entity';
 import { Lesson } from './database/entities/lesson.entity';
@@ -24,7 +22,7 @@ import { CourseModule } from './course/course.module';
     GenerationModule,
     CourseModule,
   ],
-  controllers: [AppController],
-  providers: [AppService],
+  controllers: [],
+  providers: [],
 })
 export class AppModule {}

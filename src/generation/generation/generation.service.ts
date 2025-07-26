@@ -5,11 +5,15 @@ export class GenerationService {
   /**
    * Extracts concepts from the provided paper text.
    * For now, this method returns a hardcoded array of strings for testing.
-   * @param paperText The text of the paper.
+   * @param _paperText The text of the paper (unused in current implementation).
    * @returns A promise that resolves to an array of extracted concepts.
    */
-  async extractConcepts(paperText: string): Promise<string[]> {
-    return ['Transformers', 'Self-Attention', 'Positional Encoding'];
+  async extractConcepts(_paperText: string): Promise<string[]> {
+    return Promise.resolve([
+      'Transformers',
+      'Self-Attention',
+      'Positional Encoding',
+    ]);
   }
 
   /**
@@ -21,9 +25,9 @@ export class GenerationService {
   async generateLessonContent(
     concept: string,
   ): Promise<{ title: string; content: string }> {
-    return {
+    return Promise.resolve({
       title: `Introduction to ${concept}`,
       content: `This is a lesson about ${concept}. It covers the basics and fundamental principles.`,
-    };
+    });
   }
 }

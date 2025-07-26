@@ -1,6 +1,6 @@
 # ArXiv Learning Tool: Implementation Plan
 
-### High-Level Plan & Architecture
+## High-Level Plan & Architecture
 
 The application will be built using a modular architecture in NestJS. Each core feature (paper handling, course generation, UI) will be encapsulated in its own module. Data will flow from the user's paper submission through to concept extraction, assessment, and finally to the generation of a persistent, learnable course.
 

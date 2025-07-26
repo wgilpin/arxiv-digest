@@ -1,0 +1,20 @@
+<![CDATA[<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{lessonTitle}}</title>
+  <link href="https://cdn.jsdelivr.net/npm/daisyui@5" rel="stylesheet" type="text/css" />
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+  <link href="https://cdn.jsdelivr.net/npm/daisyui@5/themes.css" rel="stylesheet" type="text/css" />
+</head>
+<body>
+  <div class="container mx-auto p-4">
+    <h1 class="text-3xl font-bold mb-4">{{lessonTitle}}</h1>
+    <div class="card bg-base-100 shadow-xl p-8 mb-4">
+      <p class="prose">{{lessonContent}}</p>
+    </div>
+    <a href="/courses/{{courseId}}" class="btn btn-primary">Back to Course</a>
+  </div>
+</body>
+</html>]]>

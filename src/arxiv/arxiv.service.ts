@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import axios from 'axios';
 import * as xml2js from 'xml2js';
 
@@ -17,32 +17,51 @@ export class ArxivService {
         params: {
           id_list: arxivId,
         },
+        responseType: 'text',
+        transformResponse: [(data) => data], // Prevent JSON parsing
       });
 
       const parser = new xml2js.Parser({ explicitArray: false });
-      const result = await parser.parseStringPromise(response.data);
+      const result = (await parser.parseStringPromise(
+        response.data as string,
+      )) as {
+        feed: {
+          entry?: {
+            title?: string;
+          };
+        };
+      };
 
       const entry = result.feed.entry;
       if (entry && entry.title) {
         return entry.title;
       }
-      return 'Title not found';
+      throw new NotFoundException(
+        `Could not find a paper with ID ${arxivId} on ArXiv.`,
+      );
     } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
       console.error(
         `Error fetching paper title for ID ${arxivId}:`,
-        error.message,
+        error instanceof Error ? error.message : 'Unknown error',
       );
-      return 'Error fetching title';
+      throw new NotFoundException(
+        `Could not find a paper with ID ${arxivId} on ArXiv.`,
+      );
     }
   }
 
   /**
    * Retrieves the text of a paper given its ArXiv ID.
    * For now, this method returns a hardcoded string of dummy text for testing.
-   * @param arxivId The ArXiv ID of the paper.
+   * @param _arxivId The ArXiv ID of the paper (unused in current implementation).
    * @returns A promise that resolves to the paper's text.
    */
-  async getPaperText(arxivId: string): Promise<string> {
-    return 'This paper introduces the Transformer, a novel network architecture...';
+  async getPaperText(_arxivId: string): Promise<string> {
+    return Promise.resolve(
+      'This paper introduces the Transformer, a novel network architecture...',
+    );
   }
 }
