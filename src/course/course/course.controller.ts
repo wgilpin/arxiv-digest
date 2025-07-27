@@ -131,26 +131,25 @@ export class CourseController {
             ${
               hasLessons
                 ? `
-            <ul class="list-disc list-inside">
+            <ul class="space-y-1">
               ${module.lessons
                 .sort((a, b) => a.orderIndex - b.orderIndex)
                 .map((lesson: Lesson) => {
                   const isCompleted =
                     lesson.progress && lesson.progress.length > 0;
                   const hasContent = lesson.content !== null;
-                  const completedClass = isCompleted ? 'text-success' : '';
-                  const completedIcon = isCompleted ? '✓ ' : '';
+                  const completedClass = isCompleted ? 'btn-success' : hasContent ? 'btn-primary' : 'btn-outline btn-secondary';
+                  const completedIcon = isCompleted ? '<span class="mr-2">✓</span>' : '';
                   const loadingIcon = !hasContent
-                    ? '<span class="loading loading-spinner loading-xs ml-1"></span>'
+                    ? '<span class="loading loading-spinner loading-xs ml-2"></span>'
                     : '';
-                  const linkClass = hasContent
-                    ? 'link link-primary'
-                    : 'link link-secondary';
 
                   return `
-                <li class="${completedClass}">
-                  <a href="/courses/lessons/${lesson.id}" class="${linkClass} ${completedClass}">
-                    ${completedIcon}${lesson.title}${loadingIcon}
+                <li class="mb-2">
+                  <a href="/courses/lessons/${lesson.id}" class="btn ${completedClass} w-full justify-start text-left">
+                    ${completedIcon}
+                    <span class="flex-1 truncate">${lesson.title}</span>
+                    ${loadingIcon}
                   </a>
                 </li>
               `;
@@ -289,26 +288,25 @@ export class CourseController {
             ${
               hasLessons
                 ? `
-            <ul class="list-disc list-inside">
+            <ul class="space-y-1">
               ${module.lessons
                 .sort((a, b) => a.orderIndex - b.orderIndex)
                 .map((lesson: Lesson) => {
                   const isCompleted =
                     lesson.progress && lesson.progress.length > 0;
                   const hasContent = lesson.content !== null;
-                  const completedClass = isCompleted ? 'text-success' : '';
-                  const completedIcon = isCompleted ? '✓ ' : '';
+                  const completedClass = isCompleted ? 'btn-success' : hasContent ? 'btn-primary' : 'btn-outline btn-secondary';
+                  const completedIcon = isCompleted ? '<span class="mr-2">✓</span>' : '';
                   const loadingIcon = !hasContent
-                    ? '<span class="loading loading-spinner loading-xs ml-1"></span>'
+                    ? '<span class="loading loading-spinner loading-xs ml-2"></span>'
                     : '';
-                  const linkClass = hasContent
-                    ? 'link link-primary'
-                    : 'link link-secondary';
 
                   return `
-                <li class="${completedClass}">
-                  <a href="/courses/lessons/${lesson.id}" class="${linkClass} ${completedClass}">
-                    ${completedIcon}${lesson.title}${loadingIcon}
+                <li class="mb-2">
+                  <a href="/courses/lessons/${lesson.id}" class="btn ${completedClass} w-full justify-start text-left">
+                    ${completedIcon}
+                    <span class="flex-1 truncate">${lesson.title}</span>
+                    ${loadingIcon}
                   </a>
                 </li>
               `;
