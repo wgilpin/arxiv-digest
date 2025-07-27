@@ -1,0 +1,83 @@
+<![CDATA[<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{lessonTitle}} - Generating...</title>
+  <link href="https://cdn.jsdelivr.net/npm/daisyui@5" rel="stylesheet" type="text/css" />
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+  <link href="https://cdn.jsdelivr.net/npm/daisyui@5/themes.css" rel="stylesheet" type="text/css" />
+</head>
+<body>
+  <div class="container mx-auto p-4">
+    <div class="mb-4">
+      <a href="/courses/{{courseId}}" class="btn btn-ghost btn-sm">← Back to Course</a>
+    </div>
+    
+    <div class="min-h-screen flex items-center justify-center">
+      <div class="card w-96 bg-base-100 shadow-xl p-8 text-center">
+        <div class="loading loading-spinner loading-lg mb-6"></div>
+        <h1 class="text-2xl font-bold mb-4">{{lessonTitle}}</h1>
+        <div class="alert alert-info">
+          <div>
+            <div class="font-semibold">Generating lesson content...</div>
+            <div class="text-sm">This may take 15-30 seconds. The page will refresh automatically when ready.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let checkCount = 0;
+    const maxChecks = 60; // 60 checks * 2 seconds = 2 minutes max
+    
+    async function checkLessonReady() {
+      checkCount++;
+      
+      try {
+        const response = await fetch('/courses/lessons/{{lessonId}}');
+        const text = await response.text();
+        
+        // Check if we got the loading page or actual content
+        if (response.ok && !text.includes('Generating lesson content')) {
+          // Lesson is ready, reload the page to show content
+          window.location.reload();
+        } else if (checkCount >= maxChecks) {
+          // Timeout - show error
+          document.body.innerHTML = `
+            <div class="container mx-auto p-4">
+              <div class="alert alert-error">
+                <div>
+                  <div class="font-semibold">Generation timed out</div>
+                  <div class="text-sm">Please try again later or <a href="/courses/{{courseId}}" class="link">return to course</a>.</div>
+                </div>
+              </div>
+            </div>
+          `;
+        }
+      } catch (error) {
+        console.error('Error checking lesson status:', error);
+        if (checkCount >= maxChecks) {
+          // Show error after timeout
+          document.body.innerHTML = `
+            <div class="container mx-auto p-4">
+              <div class="alert alert-error">
+                <div>
+                  <div class="font-semibold">Error checking lesson status</div>
+                  <div class="text-sm">Please <a href="/courses/{{courseId}}" class="link">return to course</a> and try again.</div>
+                </div>
+              </div>
+            </div>
+          `;
+        }
+      }
+    }
+    
+    // Start checking after 5 seconds, then every 2 seconds
+    setTimeout(() => {
+      setInterval(checkLessonReady, 2000);
+    }, 5000);
+  </script>
+</body>
+</html>]]>

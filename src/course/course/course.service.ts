@@ -9,6 +9,8 @@ import { GenerationService } from '../../generation/generation/generation.servic
 
 @Injectable()
 export class CourseService {
+  private generationLocks = new Map<string, boolean>();
+
   constructor(
     @InjectRepository(Course)
     private courseRepository: Repository<Course>,
@@ -40,118 +42,61 @@ export class CourseService {
     course.plannedConcepts = knowledgeGaps.join(',');
     await this.courseRepository.save(course);
 
-    // First, create all module placeholders so users can see the full course structure
-    const modulePromises = knowledgeGaps.map(async (concept, index) => {
+    // Create all module placeholders first (fast)
+    for (let moduleIndex = 0; moduleIndex < knowledgeGaps.length; moduleIndex++) {
+      const concept = knowledgeGaps[moduleIndex];
+      
       const newModule = this.moduleRepository.create({
         title: concept,
-        orderIndex: index,
+        orderIndex: moduleIndex,
         course: course,
       });
-      return await this.moduleRepository.save(newModule);
-    });
+      await this.moduleRepository.save(newModule);
+    }
 
-    await Promise.all(modulePromises);
-
-    // Then generate actual content only for the first module
+    // Generate lesson titles ONLY for module 1 (to minimize wait time)
     if (knowledgeGaps.length > 0) {
-      await this.generateModuleContent(course, knowledgeGaps[0], 0);
-    }
-  }
-
-  /**
-   * Generates actual lesson content for a module (assumes module placeholder already exists)
-   */
-  async generateModuleContent(course: Course, concept: string, orderIndex: number): Promise<CourseModuleEntity> {
-    console.log(`Starting generateModuleContent for course ${course.id}, concept: ${concept}, orderIndex: ${orderIndex}`);
-    
-    // Find the existing module placeholder
-    const existingModule = await this.moduleRepository.findOne({
-      where: { course: { id: course.id }, orderIndex },
-      relations: ['lessons'],
-    });
-
-    if (!existingModule) {
-      console.error(`Module placeholder not found for order index ${orderIndex}`);
-      throw new Error(`Module placeholder not found for order index ${orderIndex}`);
-    }
-
-    console.log(`Found module ${existingModule.id}, current lesson count: ${existingModule.lessons?.length || 0}`);
-
-    // Check if module already has content
-    if (existingModule.lessons && existingModule.lessons.length > 0) {
-      console.log(`Module ${existingModule.id} already has content, skipping generation`);
-      return existingModule; // Module content already generated
-    }
-
-    // Generate lesson topics for this concept
-    console.log(`Generating lesson topics for concept: ${concept}`);
-    const lessonTopics = await this.generationService.generateLessonTopics(concept);
-    console.log(`Generated ${lessonTopics.length} lesson topics:`, lessonTopics);
-
-    // Create multiple lessons for this module
-    let lessonOrderIndex = 0;
-    for (const topic of lessonTopics) {
-      console.log(`Generating lesson ${lessonOrderIndex + 1}: ${topic}`);
-      const lessonContent = await this.generationService.generateLessonContent(concept, topic);
-
-      const newLesson = this.lessonRepository.create({
-        title: lessonContent.title,
-        content: lessonContent.content,
-        orderIndex: lessonOrderIndex++,
-        module: existingModule,
+      const firstModule = await this.moduleRepository.findOne({
+        where: { course: { id: courseId }, orderIndex: 0 }
       });
-      const savedLesson = await this.lessonRepository.save(newLesson);
-      console.log(`Saved lesson ${savedLesson.id}: ${savedLesson.title}`);
+      
+      if (firstModule) {
+        console.log(`Generating lesson titles for module 0: ${knowledgeGaps[0]}`);
+        const lessonTopics = await this.generationService.generateLessonTopics(knowledgeGaps[0]);
+        
+        // Create lesson placeholders for first module only
+        for (let lessonIndex = 0; lessonIndex < lessonTopics.length; lessonIndex++) {
+          const lessonTitle = lessonTopics[lessonIndex];
+          const lesson = this.lessonRepository.create({
+            title: lessonTitle,
+            content: null, // No content yet
+            orderIndex: lessonIndex,
+            module: firstModule,
+          });
+          await this.lessonRepository.save(lesson);
+          console.log(`Created lesson placeholder: ${lessonTitle} (module 0, lesson ${lessonIndex})`);
+        }
+      }
     }
-
-    // Reload the module with lessons to ensure they're attached
-    const updatedModule = await this.moduleRepository.findOne({
-      where: { id: existingModule.id },
-      relations: ['lessons'],
-    });
-
-    console.log(`Module generation complete. Final lesson count: ${updatedModule?.lessons?.length || 0}`);
-    return updatedModule || existingModule;
   }
 
   /**
-   * Generates a single module with its lessons (for backward compatibility and on-demand generation)
+   * Generates lesson titles for all remaining modules (modules 2+)
    */
-  async generateModule(course: Course, concept: string, orderIndex: number): Promise<CourseModuleEntity> {
-    // Check if module already exists with content
-    const existingModule = await this.moduleRepository.findOne({
-      where: { course: { id: course.id }, orderIndex },
-      relations: ['lessons'],
-    });
-
-    if (existingModule && existingModule.lessons && existingModule.lessons.length > 0) {
-      return existingModule; // Module already generated
+  async generateRemainingLessonTitles(courseId: number): Promise<void> {
+    const lockKey = `titles-${courseId}`;
+    
+    if (this.generationLocks.get(lockKey)) {
+      console.log(`Lesson title generation already in progress for course ${courseId}`);
+      return;
     }
-
-    if (existingModule) {
-      // Module placeholder exists, just generate content
-      return await this.generateModuleContent(course, concept, orderIndex);
-    }
-
-    // Create module placeholder and generate content (fallback for on-demand generation)
-    const newModule = this.moduleRepository.create({
-      title: concept,
-      orderIndex,
-      course: course,
-    });
-    await this.moduleRepository.save(newModule);
-
-    return await this.generateModuleContent(course, concept, orderIndex);
-  }
-
-  /**
-   * Generates the next module content in the background
-   */
-  async generateNextModuleInBackground(courseId: number): Promise<void> {
+    
+    this.generationLocks.set(lockKey, true);
+    
     try {
       const course = await this.courseRepository.findOne({
         where: { id: courseId },
-        relations: ['modules', 'modules.lessons'],
+        relations: ['modules'],
       });
 
       if (!course || !course.plannedConcepts) {
@@ -160,25 +105,190 @@ export class CourseService {
 
       const plannedConcepts = course.plannedConcepts.split(',');
       
-      // Find the next module that needs content generation
-      for (let i = 0; i < plannedConcepts.length; i++) {
-        const module = course.modules?.find(m => m.orderIndex === i);
+      // Generate lesson titles for modules 2+ (skipping module 0 which is already done)
+      for (let moduleIndex = 1; moduleIndex < plannedConcepts.length; moduleIndex++) {
+        const concept = plannedConcepts[moduleIndex];
+        const module = course.modules?.find(m => m.orderIndex === moduleIndex);
         
-        if (module && (!module.lessons || module.lessons.length === 0)) {
-          const concept = plannedConcepts[i];
-          console.log(`Generating content for module ${i + 1} in background: ${concept}`);
-          await this.generateModuleContent(course, concept, i);
-          console.log(`Background generation completed for module: ${concept}`);
-          return; // Generate only one module at a time
+        if (!module) {
+          console.error(`Module not found for index ${moduleIndex}`);
+          continue;
+        }
+
+        // Check if this module already has lesson titles
+        const existingLessons = await this.lessonRepository.count({
+          where: { module: { id: module.id } }
+        });
+        
+        if (existingLessons > 0) {
+          console.log(`Module ${moduleIndex} already has lesson titles, skipping`);
+          continue;
+        }
+
+        console.log(`Generating lesson titles for module ${moduleIndex}: ${concept}`);
+        const lessonTopics = await this.generationService.generateLessonTopics(concept);
+        
+        // Create lesson placeholders
+        for (let lessonIndex = 0; lessonIndex < lessonTopics.length; lessonIndex++) {
+          const lessonTitle = lessonTopics[lessonIndex];
+          const lesson = this.lessonRepository.create({
+            title: lessonTitle,
+            content: null, // No content yet
+            orderIndex: lessonIndex,
+            module: module,
+          });
+          await this.lessonRepository.save(lesson);
+          console.log(`Created lesson placeholder: ${lessonTitle} (module ${moduleIndex}, lesson ${lessonIndex})`);
         }
       }
+      
+      console.log('Completed generating remaining lesson titles');
     } catch (error) {
-      console.error('Error in background module generation:', error);
+      console.error(`Error generating remaining lesson titles for course ${courseId}:`, error);
+    } finally {
+      this.generationLocks.delete(lockKey);
     }
   }
 
   /**
-   * Ensures a specific module exists, generating it if necessary
+   * Finds the next lesson that needs content and generates it
+   */
+  async prepareNextLesson(courseId: number): Promise<void> {
+    const lockKey = `prepare-${courseId}`;
+    
+    // Prevent multiple simultaneous preparations for the same course
+    if (this.generationLocks.get(lockKey)) {
+      console.log(`Lesson preparation already in progress for course ${courseId}`);
+      return;
+    }
+    
+    this.generationLocks.set(lockKey, true);
+    
+    try {
+      const course = await this.courseRepository.findOne({
+        where: { id: courseId },
+        relations: ['modules', 'modules.lessons'],
+      });
+
+      if (!course) {
+        console.error(`Course ${courseId} not found`);
+        return;
+      }
+
+      // Find the first lesson without content
+      const allLessons: { lesson: Lesson, moduleOrderIndex: number }[] = [];
+      for (const module of course.modules || []) {
+        for (const lesson of module.lessons || []) {
+          allLessons.push({ lesson, moduleOrderIndex: module.orderIndex });
+        }
+      }
+      
+      // Sort by module order, then lesson order
+      allLessons.sort((a, b) => {
+        const moduleOrderDiff = a.moduleOrderIndex - b.moduleOrderIndex;
+        if (moduleOrderDiff !== 0) return moduleOrderDiff;
+        return a.lesson.orderIndex - b.lesson.orderIndex;
+      });
+
+      // Find first lesson without content
+      const nextLessonItem = allLessons.find(item => !item.lesson.content);
+      
+      if (!nextLessonItem) {
+        console.log(`All lessons have content for course ${courseId}`);
+        return;
+      }
+
+      const nextLesson = nextLessonItem.lesson;
+      const moduleOrderIndex = nextLessonItem.moduleOrderIndex;
+
+      const moduleConcept = course.plannedConcepts?.split(',')[moduleOrderIndex];
+      if (!moduleConcept) {
+        console.error(`Could not find concept for module ${moduleOrderIndex}`);
+        return;
+      }
+
+      console.log(`Preparing lesson: ${nextLesson.title} (course ${courseId}, module ${moduleOrderIndex}, lesson ${nextLesson.orderIndex})`);
+      
+      // Generate content for this lesson
+      const lessonContent = await this.generationService.generateLessonContent(moduleConcept, nextLesson.title);
+      
+      // Update the lesson with content
+      nextLesson.content = lessonContent.content;
+      nextLesson.title = lessonContent.title; // Allow AI to refine the title
+      await this.lessonRepository.save(nextLesson);
+      
+      console.log(`Lesson content prepared: ${nextLesson.title}`);
+      
+    } catch (error) {
+      console.error(`Error preparing next lesson for course ${courseId}:`, error);
+    } finally {
+      this.generationLocks.delete(lockKey);
+    }
+  }
+
+  /**
+   * Generates content for a specific lesson on-demand
+   */
+  async generateSpecificLesson(lessonId: number): Promise<void> {
+    const lockKey = `lesson-${lessonId}`;
+    
+    if (this.generationLocks.get(lockKey)) {
+      console.log(`Lesson ${lessonId} already being generated`);
+      return;
+    }
+    
+    this.generationLocks.set(lockKey, true);
+    
+    try {
+      const lesson = await this.lessonRepository.findOne({
+        where: { id: lessonId },
+        relations: ['module', 'module.course'],
+      });
+
+      if (!lesson) {
+        console.error(`Lesson ${lessonId} not found`);
+        return;
+      }
+
+      if (lesson.content) {
+        console.log(`Lesson ${lessonId} already has content`);
+        return;
+      }
+
+      const course = lesson.module.course;
+      const moduleOrderIndex = lesson.module.orderIndex;
+      
+      const moduleConcept = course.plannedConcepts?.split(',')[moduleOrderIndex];
+      if (!moduleConcept) {
+        console.error(`Could not find concept for module ${moduleOrderIndex}`);
+        return;
+      }
+
+      console.log(`Generating specific lesson: ${lesson.title} (lesson ${lessonId}, module ${moduleOrderIndex})`);
+      
+      // Generate content for this lesson
+      const lessonContent = await this.generationService.generateLessonContent(moduleConcept, lesson.title);
+      
+      // Update the lesson with content
+      lesson.content = lessonContent.content;
+      lesson.title = lessonContent.title; // Allow AI to refine the title
+      await this.lessonRepository.save(lesson);
+      
+      console.log(`Specific lesson content generated: ${lesson.title}`);
+      
+    } catch (error) {
+      console.error(`Error generating specific lesson ${lessonId}:`, error);
+    } finally {
+      this.generationLocks.delete(lockKey);
+    }
+  }
+
+  // Legacy method - no longer used with the new lazy generation system
+
+  // Legacy methods - no longer used with the new lazy generation system
+
+  /**
+   * Ensures a specific module exists - now just returns existing module since all are created at syllabus time
    */
   async ensureModuleExists(courseId: number, moduleOrderIndex: number): Promise<CourseModuleEntity | null> {
     const course = await this.courseRepository.findOne({
@@ -196,16 +306,8 @@ export class CourseService {
       return null; // Module index out of range
     }
 
-    // Check if module already exists
-    const existingModule = course.modules?.find(m => m.orderIndex === moduleOrderIndex);
-    if (existingModule && existingModule.lessons && existingModule.lessons.length > 0) {
-      return existingModule;
-    }
-
-    // Generate the module on-demand
-    const concept = plannedConcepts[moduleOrderIndex];
-    console.log(`Generating module ${moduleOrderIndex + 1} on-demand: ${concept}`);
-    return await this.generateModule(course, concept, moduleOrderIndex);
+    // Return existing module (all modules are created during syllabus generation)
+    return course.modules?.find(m => m.orderIndex === moduleOrderIndex) || null;
   }
 
   async findCourseByIdWithRelations(id: number): Promise<Course | null> {

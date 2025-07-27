@@ -58,6 +58,11 @@ ${paperText.slice(0, 30000)} // Limit to avoid token limits
             .trim();
         }
 
+        // Normalize quotes to handle smart quotes from AI models
+        jsonString = jsonString
+          .replace(/[""]/g, '"')  // Convert smart quotes to straight quotes
+          .replace(/['']/g, "'"); // Convert smart single quotes too
+
         const concepts = JSON.parse(jsonString) as unknown[];
         if (Array.isArray(concepts) && concepts.length > 0) {
           return (concepts as string[]).slice(0, 12); // Limit to 12 concepts max
@@ -163,6 +168,11 @@ Concept: ${concept}
             .replace(/^json\s*/, '')
             .trim();
         }
+
+        // Normalize quotes to handle smart quotes from AI models
+        jsonString = jsonString
+          .replace(/[""]/g, '"')  // Convert smart quotes to straight quotes
+          .replace(/['']/g, "'"); // Convert smart single quotes too
 
         const topics = JSON.parse(jsonString) as unknown[];
         if (Array.isArray(topics) && topics.length > 0) {

@@ -17,7 +17,7 @@
   </div>
 
   <script>
-    let lastModuleCount = 0;
+    let lastLessonCount = 0;
     let courseId = null;
     
     // Extract course ID from current URL
@@ -40,62 +40,115 @@
         console.log('Status check result:', {
           totalModules: status.totalModules,
           completedModules: status.completedModules,
-          lastModuleCount: lastModuleCount,
+          totalLessonTitles: status.totalLessonTitles,
+          totalLessonsWithContent: status.totalLessonsWithContent,
+          lastLessonCount: lastLessonCount,
           modules: status.modules.map(m => ({ 
             index: m.orderIndex, 
             title: m.title, 
             hasContent: m.hasContent, 
-            lessonCount: m.lessonCount 
+            lessonCount: m.lessonCount,
+            lessonsWithContent: m.lessonsWithContent
           }))
         });
         
-        const completedModules = status.completedModules;
+        const currentLessonCount = status.totalLessonsWithContent;
         
-        // If we have more completed modules than before, refresh the page
-        if (completedModules > lastModuleCount) {
-          console.log(`New modules ready (${completedModules} vs ${lastModuleCount}), refreshing...`);
-          lastModuleCount = completedModules;
+        // If we have more completed lessons than before, update content dynamically
+        if (currentLessonCount > lastLessonCount) {
+          console.log(`New lessons ready (${currentLessonCount} vs ${lastLessonCount}), updating content...`);
+          lastLessonCount = currentLessonCount;
           
-          // Add a small delay and refresh
-          setTimeout(() => {
-            window.location.reload();
-          }, 1000);
+          // Update the modules content dynamically instead of full refresh
+          await updateModulesContent();
         } else {
-          console.log(`No new modules yet. Completed: ${completedModules}, Last: ${lastModuleCount}`);
+          console.log(`No new lessons yet. Completed: ${currentLessonCount}, Last: ${lastLessonCount}`);
         }
       } catch (error) {
         console.error('Error checking for updates:', error);
       }
     }
 
-    // Initialize with current module count from API, not DOM
-    async function initializeModuleCount() {
+    // Updates modules content dynamically while preserving collapsible state
+    async function updateModulesContent() {
+      if (!courseId) return;
+      
+      try {
+        // Store current state of collapsible elements
+        const collapsibleStates = new Map();
+        const collapsibleElements = document.querySelectorAll('.collapse input[type="checkbox"]');
+        collapsibleElements.forEach((checkbox, index) => {
+          const moduleElement = checkbox.closest('.collapse');
+          const moduleId = moduleElement?.getAttribute('data-module-id');
+          if (moduleId) {
+            collapsibleStates.set(moduleId, checkbox.checked);
+          } else {
+            // Fallback to index-based tracking
+            collapsibleStates.set(`index-${index}`, checkbox.checked);
+          }
+        });
+        
+        // Fetch new HTML content
+        const response = await fetch(`/courses/${courseId}/modules-html`);
+        if (!response.ok) {
+          console.error('Failed to fetch updated modules HTML:', response.status);
+          return;
+        }
+        
+        const data = await response.json();
+        const modulesContainer = document.getElementById('modules-container');
+        if (modulesContainer) {
+          // Update the content
+          modulesContainer.innerHTML = data.modulesHtml;
+          
+          // Restore collapsible states
+          const newCollapsibleElements = document.querySelectorAll('.collapse input[type="checkbox"]');
+          newCollapsibleElements.forEach((checkbox, index) => {
+            const moduleElement = checkbox.closest('.collapse');
+            const moduleId = moduleElement?.getAttribute('data-module-id');
+            
+            let wasExpanded = false;
+            if (moduleId && collapsibleStates.has(moduleId)) {
+              wasExpanded = collapsibleStates.get(moduleId);
+            } else if (collapsibleStates.has(`index-${index}`)) {
+              wasExpanded = collapsibleStates.get(`index-${index}`);
+            }
+            
+            checkbox.checked = wasExpanded;
+          });
+          
+          console.log('Modules content updated dynamically with state preservation');
+        }
+      } catch (error) {
+        console.error('Error updating modules content:', error);
+      }
+    }
+
+    // Initialize with current lesson count from API, not DOM
+    async function initializeLessonCount() {
       if (!courseId) return;
       
       try {
         const response = await fetch(`/courses/${courseId}/status`);
         if (response.ok) {
           const status = await response.json();
-          lastModuleCount = status.completedModules;
-          console.log(`Initial ready modules from API: ${lastModuleCount}`);
+          lastLessonCount = status.totalLessonsWithContent;
+          console.log(`Initial lessons with content from API: ${lastLessonCount}`);
         } else {
           // Fallback to DOM counting
-          const moduleElements = document.querySelectorAll('[class*="collapse"]');
-          const readyModules = Array.from(moduleElements).filter(el => 
-            !el.innerHTML.includes('Generating lessons...')
-          );
-          lastModuleCount = readyModules.length;
-          console.log(`Initial ready modules from DOM fallback: ${lastModuleCount}`);
+          const lessonLinks = document.querySelectorAll('a[href*="/courses/lessons/"]');
+          lastLessonCount = lessonLinks.length;
+          console.log(`Initial lesson count from DOM fallback: ${lastLessonCount}`);
         }
       } catch (error) {
-        console.error('Error initializing module count:', error);
-        lastModuleCount = 1; // Safe fallback
+        console.error('Error initializing lesson count:', error);
+        lastLessonCount = 0; // Safe fallback
       }
     }
 
     // Start monitoring after page loads
     window.addEventListener('load', async () => {
-      await initializeModuleCount();
+      await initializeLessonCount();
       
       // Check for updates every 3 seconds
       setInterval(checkForUpdates, 3000);

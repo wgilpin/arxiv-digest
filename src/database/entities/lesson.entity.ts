@@ -16,8 +16,8 @@ export class Lesson {
   @Column()
   title: string;
 
-  @Column('text')
-  content: string;
+  @Column('text', { nullable: true })
+  content: string | null;
 
   @Column()
   orderIndex: number;

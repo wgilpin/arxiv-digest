@@ -91,11 +91,16 @@ export class CourseController {
       return res.status(404).send('Course not found');
     }
 
-    // Trigger background generation of next module if user is accessing course
+    // First, prepare lesson 1 content immediately, then generate remaining titles
     setImmediate(() => {
-      this.courseService.generateNextModuleInBackground(id).catch(error => {
-        console.error('Background generation failed:', error);
-      });
+      this.courseService.prepareNextLesson(id)
+        .then(() => {
+          // After lesson 1 is ready, generate remaining lesson titles
+          return this.courseService.generateRemainingLessonTitles(id);
+        })
+        .catch(error => {
+          console.error('Course initialization failed:', error);
+        });
     });
 
     let modulesHtml = '';
@@ -105,14 +110,16 @@ export class CourseController {
         .map(
           (module: Module) => {
             const hasLessons = module.lessons && module.lessons.length > 0;
-            const isGenerating = !hasLessons;
+            const isGeneratingTitles = !hasLessons;
+            const isGeneratingContent = hasLessons && module.lessons.every(l => !l.content);
+            const showSpinner = isGeneratingTitles || isGeneratingContent;
             
             return `
         <div class="collapse collapse-plus bg-base-200 mb-2">
           <input type="checkbox" /> 
           <div class="collapse-title text-xl font-medium">
             ${module.title}
-            ${isGenerating ? '<span class="loading loading-spinner loading-sm ml-2"></span>' : ''}
+            ${showSpinner ? '<span class="loading loading-spinner loading-sm ml-2"></span>' : ''}
           </div>
           <div class="collapse-content"> 
             ${hasLessons ? `
@@ -122,12 +129,16 @@ export class CourseController {
                 .map((lesson: Lesson) => {
                   const isCompleted =
                     lesson.progress && lesson.progress.length > 0;
+                  const hasContent = lesson.content !== null;
                   const completedClass = isCompleted ? 'text-success' : '';
                   const completedIcon = isCompleted ? '✓ ' : '';
+                  const loadingIcon = !hasContent ? '<span class="loading loading-spinner loading-xs ml-1"></span>' : '';
+                  const linkClass = hasContent ? 'link link-primary' : 'link link-secondary';
+                  
                   return `
                 <li class="${completedClass}">
-                  <a href="/courses/lessons/${lesson.id}" class="link link-primary ${completedClass}">
-                    ${completedIcon}${lesson.title}
+                  <a href="/courses/lessons/${lesson.id}" class="${linkClass} ${completedClass}">
+                    ${completedIcon}${lesson.title}${loadingIcon}
                   </a>
                 </li>
               `;
@@ -137,7 +148,7 @@ export class CourseController {
             ` : `
             <div class="flex items-center justify-center p-4">
               <span class="loading loading-spinner loading-md mr-2"></span>
-              <span class="text-gray-500">Generating lessons...</span>
+              <span class="text-gray-500">Generating lesson titles...</span>
             </div>
             `}
           </div>
@@ -170,29 +181,106 @@ export class CourseController {
     const plannedConcepts = course.plannedConcepts ? course.plannedConcepts.split(',') : [];
     const moduleStatuses = plannedConcepts.map((concept, index) => {
       const module = course.modules?.find(m => m.orderIndex === index);
-      const hasContent = module?.lessons && module.lessons.length > 0;
+      const totalLessons = module?.lessons?.length || 0;
+      const lessonsWithContent = module?.lessons?.filter(l => l.content !== null).length || 0;
+      const hasContent = totalLessons > 0;
       
-      console.log(`Status check - Module ${index} (${concept}): moduleExists=${!!module}, lessonsCount=${module?.lessons?.length || 0}, hasContent=${hasContent}`);
+      console.log(`Status check - Module ${index} (${concept}): moduleExists=${!!module}, totalLessons=${totalLessons}, lessonsWithContent=${lessonsWithContent}, hasContent=${hasContent}`);
       
       return {
         orderIndex: index,
         title: concept,
         hasContent,
-        lessonCount: module?.lessons?.length || 0,
+        lessonCount: totalLessons,
+        lessonsWithContent,
         moduleId: module?.id
       };
     });
 
     const completedCount = moduleStatuses.filter(m => m.hasContent).length;
-    console.log(`Total completed modules: ${completedCount} out of ${plannedConcepts.length}`);
+    
+    // Calculate total lesson counts
+    const totalLessonTitles = moduleStatuses.reduce((sum, module) => sum + module.lessonCount, 0);
+    const totalLessonsWithContent = moduleStatuses.reduce((sum, module) => sum + module.lessonsWithContent, 0);
+    
+    console.log(`Status summary: ${completedCount}/${plannedConcepts.length} modules, ${totalLessonsWithContent}/${totalLessonTitles} lessons with content`);
 
     res.json({
       courseId: course.id,
       paperTitle: course.paperTitle,
       totalModules: plannedConcepts.length,
       completedModules: completedCount,
+      totalLessonTitles: totalLessonTitles,
+      totalLessonsWithContent: totalLessonsWithContent,
       modules: moduleStatuses
     });
+  }
+
+  @Get('/:courseId/modules-html')
+  async getModulesHtml(@Param('courseId') courseId: number, @Res() res: Response) {
+    const course = await this.courseService.findCourseByIdWithProgress(courseId);
+    
+    if (!course) {
+      return res.status(404).json({ error: 'Course not found' });
+    }
+
+    let modulesHtml = '';
+    if (course.modules && course.modules.length > 0) {
+      modulesHtml = course.modules
+        .sort((a, b) => a.orderIndex - b.orderIndex)
+        .map(
+          (module: Module) => {
+            const hasLessons = module.lessons && module.lessons.length > 0;
+            const isGeneratingTitles = !hasLessons;
+            const isGeneratingContent = hasLessons && module.lessons.every(l => !l.content);
+            const showSpinner = isGeneratingTitles || isGeneratingContent;
+            
+            return `
+        <div class="collapse collapse-plus bg-base-200 mb-2" data-module-id="${module.id}">
+          <input type="checkbox" /> 
+          <div class="collapse-title text-xl font-medium">
+            ${module.title}
+            ${showSpinner ? '<span class="loading loading-spinner loading-sm ml-2"></span>' : ''}
+          </div>
+          <div class="collapse-content"> 
+            ${hasLessons ? `
+            <ul class="list-disc list-inside">
+              ${module.lessons
+                .sort((a, b) => a.orderIndex - b.orderIndex)
+                .map((lesson: Lesson) => {
+                  const isCompleted =
+                    lesson.progress && lesson.progress.length > 0;
+                  const hasContent = lesson.content !== null;
+                  const completedClass = isCompleted ? 'text-success' : '';
+                  const completedIcon = isCompleted ? '✓ ' : '';
+                  const loadingIcon = !hasContent ? '<span class="loading loading-spinner loading-xs ml-1"></span>' : '';
+                  const linkClass = hasContent ? 'link link-primary' : 'link link-secondary';
+                  
+                  return `
+                <li class="${completedClass}">
+                  <a href="/courses/lessons/${lesson.id}" class="${linkClass} ${completedClass}">
+                    ${completedIcon}${lesson.title}${loadingIcon}
+                  </a>
+                </li>
+              `;
+                })
+                .join('')}
+            </ul>
+            ` : `
+            <div class="flex items-center justify-center p-4">
+              <span class="loading loading-spinner loading-md mr-2"></span>
+              <span class="text-gray-500">Generating lesson titles...</span>
+            </div>
+            `}
+          </div>
+        </div>
+      `;
+          }
+        )
+        .join('');
+    }
+
+    res.json({ modulesHtml });
   }
 
   @Get('/:courseId/modules/:moduleIndex')
@@ -204,10 +292,10 @@ export class CourseController {
       return res.status(404).send('Module not found or invalid module index');
     }
 
-    // Trigger background generation of next module
+    // Prepare next lesson
     setImmediate(() => {
-      this.courseService.generateNextModuleInBackground(courseId).catch(error => {
-        console.error('Background generation failed:', error);
+      this.courseService.prepareNextLesson(courseId).catch(error => {
+        console.error('Lesson preparation failed:', error);
       });
     });
 
@@ -223,13 +311,30 @@ export class CourseController {
       return res.status(404).send('Lesson not found');
     }
 
-    // Trigger background generation of next module when user accesses lessons
+    // Prepare next lesson when user accesses a lesson
     const courseId = lesson.module.course.id;
     setImmediate(() => {
-      this.courseService.generateNextModuleInBackground(courseId).catch(error => {
-        console.error('Background generation failed:', error);
+      this.courseService.prepareNextLesson(courseId).catch(error => {
+        console.error('Lesson preparation failed:', error);
       });
     });
+
+    // Check if lesson has content
+    if (!lesson.content) {
+      // Start generating this specific lesson and show loading page
+      setImmediate(() => {
+        this.courseService.generateSpecificLesson(lesson.id).catch(error => {
+          console.error('On-demand lesson generation failed:', error);
+        });
+      });
+      
+      const html = TemplateHelper.renderTemplate('lesson-loading.html', {
+        lessonTitle: lesson.title,
+        courseId: lesson.module.course.id,
+        lessonId: lesson.id,
+      });
+      return res.send(html);
+    }
 
     // Convert markdown to HTML
     let lessonContentHtml = await marked(lesson.content);
