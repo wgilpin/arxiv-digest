@@ -11,9 +11,102 @@
 <body>
   <div class="container mx-auto p-4">
     <h1 class="text-3xl font-bold mb-6 text-center">Course: {{paperTitle}}</h1>
-    <div class="space-y-4">
+    <div id="modules-container" class="space-y-4">
       {{modulesHtml}}
     </div>
   </div>
+
+  <script>
+    let lastModuleCount = 0;
+    let courseId = null;
+    
+    // Extract course ID from current URL
+    const pathParts = window.location.pathname.split('/');
+    if (pathParts[1] === 'courses' && pathParts[2]) {
+      courseId = pathParts[2];
+    }
+
+    async function checkForUpdates() {
+      if (!courseId) return;
+      
+      try {
+        const response = await fetch(`/courses/${courseId}/status`);
+        if (!response.ok) {
+          console.error('Status check failed:', response.status);
+          return;
+        }
+        
+        const status = await response.json();
+        console.log('Status check result:', {
+          totalModules: status.totalModules,
+          completedModules: status.completedModules,
+          lastModuleCount: lastModuleCount,
+          modules: status.modules.map(m => ({ 
+            index: m.orderIndex, 
+            title: m.title, 
+            hasContent: m.hasContent, 
+            lessonCount: m.lessonCount 
+          }))
+        });
+        
+        const completedModules = status.completedModules;
+        
+        // If we have more completed modules than before, refresh the page
+        if (completedModules > lastModuleCount) {
+          console.log(`New modules ready (${completedModules} vs ${lastModuleCount}), refreshing...`);
+          lastModuleCount = completedModules;
+          
+          // Add a small delay and refresh
+          setTimeout(() => {
+            window.location.reload();
+          }, 1000);
+        } else {
+          console.log(`No new modules yet. Completed: ${completedModules}, Last: ${lastModuleCount}`);
+        }
+      } catch (error) {
+        console.error('Error checking for updates:', error);
+      }
+    }
+
+    // Initialize with current module count from API, not DOM
+    async function initializeModuleCount() {
+      if (!courseId) return;
+      
+      try {
+        const response = await fetch(`/courses/${courseId}/status`);
+        if (response.ok) {
+          const status = await response.json();
+          lastModuleCount = status.completedModules;
+          console.log(`Initial ready modules from API: ${lastModuleCount}`);
+        } else {
+          // Fallback to DOM counting
+          const moduleElements = document.querySelectorAll('[class*="collapse"]');
+          const readyModules = Array.from(moduleElements).filter(el => 
+            !el.innerHTML.includes('Generating lessons...')
+          );
+          lastModuleCount = readyModules.length;
+          console.log(`Initial ready modules from DOM fallback: ${lastModuleCount}`);
+        }
+      } catch (error) {
+        console.error('Error initializing module count:', error);
+        lastModuleCount = 1; // Safe fallback
+      }
+    }
+
+    // Start monitoring after page loads
+    window.addEventListener('load', async () => {
+      await initializeModuleCount();
+      
+      // Check for updates every 3 seconds
+      setInterval(checkForUpdates, 3000);
+      
+      // Also check when page becomes visible (user switches back to tab)
+      document.addEventListener('visibilitychange', () => {
+        if (!document.hidden) {
+          checkForUpdates();
+        }
+      });
+    });
+  </script>
 </body>
 </html>]]>

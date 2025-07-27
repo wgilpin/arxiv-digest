@@ -159,6 +159,42 @@ export class CourseController {
     res.send(html);
   }
 
+  @Get('/:courseId/status')
+  async getCourseStatus(@Param('courseId') courseId: number, @Res() res: Response) {
+    const course = await this.courseService.findCourseByIdWithProgress(courseId);
+    
+    if (!course) {
+      return res.status(404).json({ error: 'Course not found' });
+    }
+
+    const plannedConcepts = course.plannedConcepts ? course.plannedConcepts.split(',') : [];
+    const moduleStatuses = plannedConcepts.map((concept, index) => {
+      const module = course.modules?.find(m => m.orderIndex === index);
+      const hasContent = module?.lessons && module.lessons.length > 0;
+      
+      console.log(`Status check - Module ${index} (${concept}): moduleExists=${!!module}, lessonsCount=${module?.lessons?.length || 0}, hasContent=${hasContent}`);
+      
+      return {
+        orderIndex: index,
+        title: concept,
+        hasContent,
+        lessonCount: module?.lessons?.length || 0,
+        moduleId: module?.id
+      };
+    });
+
+    const completedCount = moduleStatuses.filter(m => m.hasContent).length;
+    console.log(`Total completed modules: ${completedCount} out of ${plannedConcepts.length}`);
+
+    res.json({
+      courseId: course.id,
+      paperTitle: course.paperTitle,
+      totalModules: plannedConcepts.length,
+      completedModules: completedCount,
+      modules: moduleStatuses
+    });
+  }
+
   @Get('/:courseId/modules/:moduleIndex')
   async getModulePage(@Param('courseId') courseId: number, @Param('moduleIndex') moduleIndex: number, @Res() res: Response) {
     // Ensure the module exists, generating it if necessary

@@ -62,6 +62,8 @@ export class CourseService {
    * Generates actual lesson content for a module (assumes module placeholder already exists)
    */
   async generateModuleContent(course: Course, concept: string, orderIndex: number): Promise<CourseModuleEntity> {
+    console.log(`Starting generateModuleContent for course ${course.id}, concept: ${concept}, orderIndex: ${orderIndex}`);
+    
     // Find the existing module placeholder
     const existingModule = await this.moduleRepository.findOne({
       where: { course: { id: course.id }, orderIndex },
@@ -69,20 +71,27 @@ export class CourseService {
     });
 
     if (!existingModule) {
+      console.error(`Module placeholder not found for order index ${orderIndex}`);
       throw new Error(`Module placeholder not found for order index ${orderIndex}`);
     }
 
+    console.log(`Found module ${existingModule.id}, current lesson count: ${existingModule.lessons?.length || 0}`);
+
     // Check if module already has content
     if (existingModule.lessons && existingModule.lessons.length > 0) {
+      console.log(`Module ${existingModule.id} already has content, skipping generation`);
       return existingModule; // Module content already generated
     }
 
     // Generate lesson topics for this concept
+    console.log(`Generating lesson topics for concept: ${concept}`);
     const lessonTopics = await this.generationService.generateLessonTopics(concept);
+    console.log(`Generated ${lessonTopics.length} lesson topics:`, lessonTopics);
 
     // Create multiple lessons for this module
     let lessonOrderIndex = 0;
     for (const topic of lessonTopics) {
+      console.log(`Generating lesson ${lessonOrderIndex + 1}: ${topic}`);
       const lessonContent = await this.generationService.generateLessonContent(concept, topic);
 
       const newLesson = this.lessonRepository.create({
@@ -91,10 +100,18 @@ export class CourseService {
         orderIndex: lessonOrderIndex++,
         module: existingModule,
       });
-      await this.lessonRepository.save(newLesson);
+      const savedLesson = await this.lessonRepository.save(newLesson);
+      console.log(`Saved lesson ${savedLesson.id}: ${savedLesson.title}`);
     }
 
-    return existingModule;
+    // Reload the module with lessons to ensure they're attached
+    const updatedModule = await this.moduleRepository.findOne({
+      where: { id: existingModule.id },
+      relations: ['lessons'],
+    });
+
+    console.log(`Module generation complete. Final lesson count: ${updatedModule?.lessons?.length || 0}`);
+    return updatedModule || existingModule;
   }
 
   /**
