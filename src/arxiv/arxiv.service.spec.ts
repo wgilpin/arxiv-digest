@@ -56,9 +56,15 @@ describe('ArxivService', () => {
       new ArxivService();
 
       // Verify directories are created
-      expect(mockedFs.mkdirSync).toHaveBeenCalledWith(testCacheDir, { recursive: true });
-      expect(mockedFs.mkdirSync).toHaveBeenCalledWith(testPdfCacheDir, { recursive: true });
-      expect(mockedFs.mkdirSync).toHaveBeenCalledWith(testTextCacheDir, { recursive: true });
+      expect(mockedFs.mkdirSync).toHaveBeenCalledWith(testCacheDir, {
+        recursive: true,
+      });
+      expect(mockedFs.mkdirSync).toHaveBeenCalledWith(testPdfCacheDir, {
+        recursive: true,
+      });
+      expect(mockedFs.mkdirSync).toHaveBeenCalledWith(testTextCacheDir, {
+        recursive: true,
+      });
     });
 
     it('should not create directories if they already exist', () => {
@@ -110,7 +116,9 @@ describe('ArxivService', () => {
       });
 
       // Mock Gemini API
-      const mockGenerateContent = jest.fn().mockResolvedValue(mockGeminiResponse);
+      const mockGenerateContent = jest
+        .fn()
+        .mockResolvedValue(mockGeminiResponse);
       const mockGetGenerativeModel = jest.fn().mockReturnValue({
         generateContent: mockGenerateContent,
       });
@@ -123,7 +131,7 @@ describe('ArxivService', () => {
 
       // Verify PDF was read from cache, not downloaded
       expect(mockedFs.readFileSync).toHaveBeenCalledWith(
-        path.join(testPdfCacheDir, `${testArxivId}.pdf`)
+        path.join(testPdfCacheDir, `${testArxivId}.pdf`),
       );
       expect(mockedAxios.get).not.toHaveBeenCalled();
     });
@@ -144,7 +152,9 @@ describe('ArxivService', () => {
       mockedFs.writeFileSync.mockImplementation();
 
       // Mock Gemini API
-      const mockGenerateContent = jest.fn().mockResolvedValue(mockGeminiResponse);
+      const mockGenerateContent = jest
+        .fn()
+        .mockResolvedValue(mockGeminiResponse);
       const mockGetGenerativeModel = jest.fn().mockReturnValue({
         generateContent: mockGenerateContent,
       });
@@ -161,13 +171,13 @@ describe('ArxivService', () => {
         {
           responseType: 'arraybuffer',
           timeout: 30000,
-        }
+        },
       );
 
       // Verify PDF was cached
       expect(mockedFs.writeFileSync).toHaveBeenCalledWith(
         path.join(testPdfCacheDir, `${testArxivId}.pdf`),
-        expect.any(Buffer)
+        expect.any(Buffer),
       );
     });
 
@@ -190,7 +200,9 @@ describe('ArxivService', () => {
       });
 
       // Mock Gemini API
-      const mockGenerateContent = jest.fn().mockResolvedValue(mockGeminiResponse);
+      const mockGenerateContent = jest
+        .fn()
+        .mockResolvedValue(mockGeminiResponse);
       const mockGetGenerativeModel = jest.fn().mockReturnValue({
         generateContent: mockGenerateContent,
       });
@@ -229,7 +241,7 @@ describe('ArxivService', () => {
       expect(result).toBe(cachedText);
       expect(mockedFs.readFileSync).toHaveBeenCalledWith(
         path.join(testTextCacheDir, `${testArxivId}.txt`),
-        'utf-8'
+        'utf-8',
       );
     });
 
@@ -255,7 +267,9 @@ describe('ArxivService', () => {
       mockedFs.writeFileSync.mockImplementation();
 
       // Mock Gemini API
-      const mockGenerateContent = jest.fn().mockResolvedValue(mockGeminiResponse);
+      const mockGenerateContent = jest
+        .fn()
+        .mockResolvedValue(mockGeminiResponse);
       const mockGetGenerativeModel = jest.fn().mockReturnValue({
         generateContent: mockGenerateContent,
       });
@@ -272,7 +286,7 @@ describe('ArxivService', () => {
       expect(mockedFs.writeFileSync).toHaveBeenCalledWith(
         path.join(testTextCacheDir, `${testArxivId}.txt`),
         cleanedText,
-        'utf-8'
+        'utf-8',
       );
     });
 
@@ -286,7 +300,7 @@ describe('ArxivService', () => {
       mockedFs.statSync.mockReturnValue({
         mtime: new Date(Date.now() - 1000 * 60 * 60), // 1 hour ago
       } as any);
-      
+
       mockedFs.readFileSync.mockImplementation((filePath: any) => {
         if (filePath.includes('.txt')) {
           throw new Error('Read error');
@@ -300,7 +314,9 @@ describe('ArxivService', () => {
       });
 
       // Mock Gemini API
-      const mockGenerateContent = jest.fn().mockResolvedValue(mockGeminiResponse);
+      const mockGenerateContent = jest
+        .fn()
+        .mockResolvedValue(mockGeminiResponse);
       const mockGetGenerativeModel = jest.fn().mockReturnValue({
         generateContent: mockGenerateContent,
       });
@@ -322,7 +338,7 @@ describe('ArxivService', () => {
       mockedFs.existsSync.mockReturnValue(false);
 
       const isValid = (service as any).isCachedPdfValid('/fake/path');
-      
+
       expect(isValid).toBe(false);
     });
 
@@ -333,7 +349,7 @@ describe('ArxivService', () => {
       } as any);
 
       const isValid = (service as any).isCachedPdfValid('/fake/path');
-      
+
       expect(isValid).toBe(false);
     });
 
@@ -344,7 +360,7 @@ describe('ArxivService', () => {
       } as any);
 
       const isValid = (service as any).isCachedPdfValid('/fake/path');
-      
+
       expect(isValid).toBe(true);
     });
 
@@ -355,7 +371,7 @@ describe('ArxivService', () => {
       });
 
       const isValid = (service as any).isCachedPdfValid('/fake/path');
-      
+
       expect(isValid).toBe(false);
     });
   });
@@ -412,8 +428,12 @@ describe('ArxivService', () => {
     });
 
     it('should throw error for null or undefined input', () => {
-      expect(() => (service as any).extractArxivId(null)).toThrow('Invalid input: must be a non-empty string');
-      expect(() => (service as any).extractArxivId(undefined)).toThrow('Invalid input: must be a non-empty string');
+      expect(() => (service as any).extractArxivId(null)).toThrow(
+        'Invalid input: must be a non-empty string',
+      );
+      expect(() => (service as any).extractArxivId(undefined)).toThrow(
+        'Invalid input: must be a non-empty string',
+      );
     });
 
     it('should handle URLs with query parameters and fragments', () => {
@@ -443,8 +463,10 @@ describe('ArxivService', () => {
 
       mockedAxios.get.mockResolvedValue(mockResponse);
 
-      const result = await service.fetchPaperTitle('https://arxiv.org/abs/2507.11768');
-      
+      const result = await service.fetchPaperTitle(
+        'https://arxiv.org/abs/2507.11768',
+      );
+
       expect(result).toBe('Test Paper Title');
       expect(mockedAxios.get).toHaveBeenCalledWith(
         'http://export.arxiv.org/api/query',
@@ -452,13 +474,13 @@ describe('ArxivService', () => {
           params: { id_list: '2507.11768' },
           responseType: 'text',
           transformResponse: [expect.any(Function)],
-        }
+        },
       );
     });
 
     it('should work with URLs in getPaperText', async () => {
       const cachedText = 'cached cleaned text from URL test';
-      
+
       // Mock text cache exists
       mockedFs.existsSync.mockImplementation((filePath: any) => {
         if (filePath.includes('2507.11768.txt')) {
@@ -474,12 +496,14 @@ describe('ArxivService', () => {
         return Buffer.from('mock content');
       });
 
-      const result = await service.getPaperText('https://arxiv.org/abs/2507.11768');
-      
+      const result = await service.getPaperText(
+        'https://arxiv.org/abs/2507.11768',
+      );
+
       expect(result).toBe(cachedText);
       expect(mockedFs.readFileSync).toHaveBeenCalledWith(
         path.join(testTextCacheDir, '2507.11768.txt'),
-        'utf-8'
+        'utf-8',
       );
     });
   });

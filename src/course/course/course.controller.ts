@@ -1,3 +1,4 @@
+/* eslint-disable no-useless-escape */
 import { Controller, Get, Post, Param, Res } from '@nestjs/common';
 import { Response } from 'express';
 import { CourseService } from './course.service';
@@ -39,7 +40,7 @@ export class CourseController {
     ];
 
     let result = html;
-    
+
     for (const pattern of mathPatterns) {
       result = result.replace(pattern, (match, openTag, content, closeTag) => {
         // Only convert if it looks like mathematical notation
@@ -77,9 +78,13 @@ export class CourseController {
 
     // Also check if it contains typical mathematical variable names
     const mathVariables = ['pos', 'model', 'sin', 'cos', 'PE'];
-    const containsMathVar = mathVariables.some(mathVar => content.includes(mathVar));
+    const containsMathVar = mathVariables.some((mathVar) =>
+      content.includes(mathVar),
+    );
 
-    return mathIndicators.some(pattern => pattern.test(content)) || containsMathVar;
+    return (
+      mathIndicators.some((pattern) => pattern.test(content)) || containsMathVar
+    );
   }
 
   @Get('/:id')
@@ -93,12 +98,13 @@ export class CourseController {
 
     // First, prepare lesson 1 content immediately, then generate remaining titles
     setImmediate(() => {
-      this.courseService.prepareNextLesson(id)
+      this.courseService
+        .prepareNextLesson(id)
         .then(() => {
           // After lesson 1 is ready, generate remaining lesson titles
           return this.courseService.generateRemainingLessonTitles(id);
         })
-        .catch(error => {
+        .catch((error) => {
           console.error('Course initialization failed:', error);
         });
     });
@@ -107,14 +113,14 @@ export class CourseController {
     if (course.modules && course.modules.length > 0) {
       modulesHtml = course.modules
         .sort((a, b) => a.orderIndex - b.orderIndex)
-        .map(
-          (module: Module) => {
-            const hasLessons = module.lessons && module.lessons.length > 0;
-            const isGeneratingTitles = !hasLessons;
-            const isGeneratingContent = hasLessons && module.lessons.every(l => !l.content);
-            const showSpinner = isGeneratingTitles || isGeneratingContent;
-            
-            return `
+        .map((module: Module) => {
+          const hasLessons = module.lessons && module.lessons.length > 0;
+          const isGeneratingTitles = !hasLessons;
+          const isGeneratingContent =
+            hasLessons && module.lessons.every((l) => !l.content);
+          const showSpinner = isGeneratingTitles || isGeneratingContent;
+
+          return `
         <div class="collapse collapse-plus bg-base-200 mb-2">
           <input type="checkbox" /> 
           <div class="collapse-title text-xl font-medium">
@@ -122,7 +128,9 @@ export class CourseController {
             ${showSpinner ? '<span class="loading loading-spinner loading-sm ml-2"></span>' : ''}
           </div>
           <div class="collapse-content"> 
-            ${hasLessons ? `
+            ${
+              hasLessons
+                ? `
             <ul class="list-disc list-inside">
               ${module.lessons
                 .sort((a, b) => a.orderIndex - b.orderIndex)
@@ -132,9 +140,13 @@ export class CourseController {
                   const hasContent = lesson.content !== null;
                   const completedClass = isCompleted ? 'text-success' : '';
                   const completedIcon = isCompleted ? '✓ ' : '';
-                  const loadingIcon = !hasContent ? '<span class="loading loading-spinner loading-xs ml-1"></span>' : '';
-                  const linkClass = hasContent ? 'link link-primary' : 'link link-secondary';
-                  
+                  const loadingIcon = !hasContent
+                    ? '<span class="loading loading-spinner loading-xs ml-1"></span>'
+                    : '';
+                  const linkClass = hasContent
+                    ? 'link link-primary'
+                    : 'link link-secondary';
+
                   return `
                 <li class="${completedClass}">
                   <a href="/courses/lessons/${lesson.id}" class="${linkClass} ${completedClass}">
@@ -145,17 +157,18 @@ export class CourseController {
                 })
                 .join('')}
             </ul>
-            ` : `
+            `
+                : `
             <div class="flex items-center justify-center p-4">
               <span class="loading loading-spinner loading-md mr-2"></span>
               <span class="text-gray-500">Generating lesson titles...</span>
             </div>
-            `}
+            `
+            }
           </div>
         </div>
       `;
-          }
-        )
+        })
         .join('');
     } else {
       modulesHtml = `
@@ -171,39 +184,65 @@ export class CourseController {
   }
 
   @Get('/:courseId/status')
-  async getCourseStatus(@Param('courseId') courseId: number, @Res() res: Response) {
-    const course = await this.courseService.findCourseByIdWithProgress(courseId);
-    
+  async getCourseStatus(
+    @Param('courseId') courseId: number,
+    @Res() res: Response,
+  ) {
+    const course =
+      await this.courseService.findCourseByIdWithProgress(courseId);
+
     if (!course) {
       return res.status(404).json({ error: 'Course not found' });
     }
 
-    const plannedConcepts = course.plannedConcepts ? course.plannedConcepts.split(',') : [];
+    const plannedConcepts: string[] =
+      typeof course.plannedConcepts === 'string'
+        ? (course.plannedConcepts as string).split(',')
+        : Array.isArray(course.plannedConcepts)
+          ? (course.plannedConcepts as string[])
+          : [];
     const moduleStatuses = plannedConcepts.map((concept, index) => {
-      const module = course.modules?.find(m => m.orderIndex === index);
+      const module = course.modules?.find((m) => m.orderIndex === index);
       const totalLessons = module?.lessons?.length || 0;
-      const lessonsWithContent = module?.lessons?.filter(l => l.content !== null).length || 0;
+      const lessonsWithContent =
+        module?.lessons?.filter(
+          (l): l is Lesson =>
+            !!l &&
+            typeof l === 'object' &&
+            'content' in l &&
+            (l as Lesson).content !== null,
+        ).length || 0;
       const hasContent = totalLessons > 0;
-      
-      console.log(`Status check - Module ${index} (${concept}): moduleExists=${!!module}, totalLessons=${totalLessons}, lessonsWithContent=${lessonsWithContent}, hasContent=${hasContent}`);
-      
+
+      console.log(
+        `Status check - Module ${index} (${concept}): moduleExists=${!!module}, totalLessons=${totalLessons}, lessonsWithContent=${lessonsWithContent}, hasContent=${hasContent}`,
+      );
+
       return {
         orderIndex: index,
         title: concept,
         hasContent,
         lessonCount: totalLessons,
         lessonsWithContent,
-        moduleId: module?.id
+        moduleId: module?.id,
       };
     });
 
-    const completedCount = moduleStatuses.filter(m => m.hasContent).length;
-    
+    const completedCount = moduleStatuses.filter((m) => m.hasContent).length;
+
     // Calculate total lesson counts
-    const totalLessonTitles = moduleStatuses.reduce((sum, module) => sum + module.lessonCount, 0);
-    const totalLessonsWithContent = moduleStatuses.reduce((sum, module) => sum + module.lessonsWithContent, 0);
-    
-    console.log(`Status summary: ${completedCount}/${plannedConcepts.length} modules, ${totalLessonsWithContent}/${totalLessonTitles} lessons with content`);
+    const totalLessonTitles = moduleStatuses.reduce(
+      (sum, module) => sum + module.lessonCount,
+      0,
+    );
+    const totalLessonsWithContent = moduleStatuses.reduce(
+      (sum, module) => sum + module.lessonsWithContent,
+      0,
+    );
+
+    console.log(
+      `Status summary: ${completedCount}/${plannedConcepts.length} modules, ${totalLessonsWithContent}/${totalLessonTitles} lessons with content`,
+    );
 
     res.json({
       courseId: course.id,
@@ -212,14 +251,18 @@ export class CourseController {
       completedModules: completedCount,
       totalLessonTitles: totalLessonTitles,
       totalLessonsWithContent: totalLessonsWithContent,
-      modules: moduleStatuses
+      modules: moduleStatuses,
     });
   }
 
   @Get('/:courseId/modules-html')
-  async getModulesHtml(@Param('courseId') courseId: number, @Res() res: Response) {
-    const course = await this.courseService.findCourseByIdWithProgress(courseId);
-    
+  async getModulesHtml(
+    @Param('courseId') courseId: number,
+    @Res() res: Response,
+  ) {
+    const course =
+      await this.courseService.findCourseByIdWithProgress(courseId);
+
     if (!course) {
       return res.status(404).json({ error: 'Course not found' });
     }
@@ -228,14 +271,14 @@ export class CourseController {
     if (course.modules && course.modules.length > 0) {
       modulesHtml = course.modules
         .sort((a, b) => a.orderIndex - b.orderIndex)
-        .map(
-          (module: Module) => {
-            const hasLessons = module.lessons && module.lessons.length > 0;
-            const isGeneratingTitles = !hasLessons;
-            const isGeneratingContent = hasLessons && module.lessons.every(l => !l.content);
-            const showSpinner = isGeneratingTitles || isGeneratingContent;
-            
-            return `
+        .map((module: Module) => {
+          const hasLessons = module.lessons && module.lessons.length > 0;
+          const isGeneratingTitles = !hasLessons;
+          const isGeneratingContent =
+            hasLessons && module.lessons.every((l) => !l.content);
+          const showSpinner = isGeneratingTitles || isGeneratingContent;
+
+          return `
         <div class="collapse collapse-plus bg-base-200 mb-2" data-module-id="${module.id}">
           <input type="checkbox" /> 
           <div class="collapse-title text-xl font-medium">
@@ -243,7 +286,9 @@ export class CourseController {
             ${showSpinner ? '<span class="loading loading-spinner loading-sm ml-2"></span>' : ''}
           </div>
           <div class="collapse-content"> 
-            ${hasLessons ? `
+            ${
+              hasLessons
+                ? `
             <ul class="list-disc list-inside">
               ${module.lessons
                 .sort((a, b) => a.orderIndex - b.orderIndex)
@@ -253,9 +298,13 @@ export class CourseController {
                   const hasContent = lesson.content !== null;
                   const completedClass = isCompleted ? 'text-success' : '';
                   const completedIcon = isCompleted ? '✓ ' : '';
-                  const loadingIcon = !hasContent ? '<span class="loading loading-spinner loading-xs ml-1"></span>' : '';
-                  const linkClass = hasContent ? 'link link-primary' : 'link link-secondary';
-                  
+                  const loadingIcon = !hasContent
+                    ? '<span class="loading loading-spinner loading-xs ml-1"></span>'
+                    : '';
+                  const linkClass = hasContent
+                    ? 'link link-primary'
+                    : 'link link-secondary';
+
                   return `
                 <li class="${completedClass}">
                   <a href="/courses/lessons/${lesson.id}" class="${linkClass} ${completedClass}">
@@ -266,17 +315,18 @@ export class CourseController {
                 })
                 .join('')}
             </ul>
-            ` : `
+            `
+                : `
             <div class="flex items-center justify-center p-4">
               <span class="loading loading-spinner loading-md mr-2"></span>
               <span class="text-gray-500">Generating lesson titles...</span>
             </div>
-            `}
+            `
+            }
           </div>
         </div>
       `;
-          }
-        )
+        })
         .join('');
     }
 
@@ -284,17 +334,24 @@ export class CourseController {
   }
 
   @Get('/:courseId/modules/:moduleIndex')
-  async getModulePage(@Param('courseId') courseId: number, @Param('moduleIndex') moduleIndex: number, @Res() res: Response) {
+  async getModulePage(
+    @Param('courseId') courseId: number,
+    @Param('moduleIndex') moduleIndex: number,
+    @Res() res: Response,
+  ) {
     // Ensure the module exists, generating it if necessary
-    const module = await this.courseService.ensureModuleExists(courseId, moduleIndex);
-    
+    const module = await this.courseService.ensureModuleExists(
+      courseId,
+      moduleIndex,
+    );
+
     if (!module) {
       return res.status(404).send('Module not found or invalid module index');
     }
 
     // Prepare next lesson
     setImmediate(() => {
-      this.courseService.prepareNextLesson(courseId).catch(error => {
+      this.courseService.prepareNextLesson(courseId).catch((error) => {
         console.error('Lesson preparation failed:', error);
       });
     });
@@ -314,7 +371,7 @@ export class CourseController {
     // Prepare next lesson when user accesses a lesson
     const courseId = lesson.module.course.id;
     setImmediate(() => {
-      this.courseService.prepareNextLesson(courseId).catch(error => {
+      this.courseService.prepareNextLesson(courseId).catch((error) => {
         console.error('Lesson preparation failed:', error);
       });
     });
@@ -323,11 +380,11 @@ export class CourseController {
     if (!lesson.content) {
       // Start generating this specific lesson and show loading page
       setImmediate(() => {
-        this.courseService.generateSpecificLesson(lesson.id).catch(error => {
+        this.courseService.generateSpecificLesson(lesson.id).catch((error) => {
           console.error('On-demand lesson generation failed:', error);
         });
       });
-      
+
       const html = TemplateHelper.renderTemplate('lesson-loading.html', {
         lessonTitle: lesson.title,
         courseId: lesson.module.course.id,
@@ -338,10 +395,10 @@ export class CourseController {
 
     // Convert markdown to HTML
     let lessonContentHtml = await marked(lesson.content);
-    
+
     // Post-process to convert mathematical notation from code tags to LaTeX
     lessonContentHtml = this.convertMathCodeToLatex(lessonContentHtml);
-    
+
     const html = TemplateHelper.renderTemplate('lesson-page.html', {
       lessonTitle: lesson.title,
       lessonContent: lessonContentHtml,

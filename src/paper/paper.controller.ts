@@ -73,7 +73,6 @@ export class PaperController {
       const extractedConcepts =
         await this.generationService.extractConcepts(paperText);
 
-      
       const newCourse = this.courseRepository.create({
         paperArxivId: arxivId,
         paperTitle: paperTitle,

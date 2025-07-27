@@ -106,8 +106,10 @@ export class ArxivService {
       // arxiv.org/abs/2507.11768
       // https://arxiv.org/pdf/2507.11768.pdf
       // https://arxiv.org/abs/math.GT/0309136
-      const urlMatch = trimmedInput.match(/arxiv\.org\/(?:abs|pdf)\/(.+?)(?:\.pdf)?(?:\?|#|$)/i);
-      
+      const urlMatch = trimmedInput.match(
+        /arxiv\.org\/(?:abs|pdf)\/(.+?)(?:\.pdf)?(?:\?|#|$)/i,
+      );
+
       if (urlMatch && urlMatch[1]) {
         return urlMatch[1].trim();
       } else {
@@ -122,13 +124,16 @@ export class ArxivService {
     // - math.GT/0309136 (old format with subcategory)
     // - hep-th/9901001 (old format)
     // - cond-mat.mes-hall/0309136v2 (old format with subcategory and version)
-    const idPattern = /^(?:[a-z-]+(?:\.[a-z-]+)?\/\d{7}(?:v\d+)?|\d{4}\.\d{4,5}(?:v\d+)?)$/i;
-    
+    const idPattern =
+      /^(?:[a-z-]+(?:\.[a-z-]+)?\/\d{7}(?:v\d+)?|\d{4}\.\d{4,5}(?:v\d+)?)$/i;
+
     if (idPattern.test(trimmedInput)) {
       return trimmedInput;
     }
 
-    throw new Error(`Invalid ArXiv ID format: ${input}. Expected formats: '2507.11768', 'math.GT/0309136', or ArXiv URL`);
+    throw new Error(
+      `Invalid ArXiv ID format: ${input}. Expected formats: '2507.11768', 'math.GT/0309136', or ArXiv URL`,
+    );
   }
 
   /**

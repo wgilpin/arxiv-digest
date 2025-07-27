@@ -60,7 +60,7 @@ ${paperText.slice(0, 30000)} // Limit to avoid token limits
 
         // Normalize quotes to handle smart quotes from AI models
         jsonString = jsonString
-          .replace(/[""]/g, '"')  // Convert smart quotes to straight quotes
+          .replace(/[""]/g, '"') // Convert smart quotes to straight quotes
           .replace(/['']/g, "'"); // Convert smart single quotes too
 
         const concepts = JSON.parse(jsonString) as unknown[];
@@ -171,7 +171,7 @@ Concept: ${concept}
 
         // Normalize quotes to handle smart quotes from AI models
         jsonString = jsonString
-          .replace(/[""]/g, '"')  // Convert smart quotes to straight quotes
+          .replace(/[""]/g, '"') // Convert smart quotes to straight quotes
           .replace(/['']/g, "'"); // Convert smart single quotes too
 
         const topics = JSON.parse(jsonString) as unknown[];
@@ -191,7 +191,7 @@ Concept: ${concept}
       ];
     } catch (error) {
       console.error(`Error generating lesson topics for ${concept}:`, error);
-      
+
       // Fallback topics
       return [
         `Introduction to ${concept}`,
@@ -218,7 +218,7 @@ Concept: ${concept}
 
       const lessonFocus = topic || concept;
       const isTopicSpecific = !!topic;
-      
+
       const prompt = `
 Create a ${isTopicSpecific ? 'focused' : 'comprehensive'} educational lesson about ${isTopicSpecific ? `the topic: "${topic}" (part of the broader concept: "${concept}")` : `the concept: "${concept}"`}
 
@@ -231,13 +231,16 @@ TITLE: [A clear, engaging title for the lesson]
 
 CONTENT:
 [Write the lesson content in well-formatted Markdown. ${isTopicSpecific ? 'For this focused lesson, include:' : 'Include:'}]
-${isTopicSpecific ? `
+${
+  isTopicSpecific
+    ? `
 - Clear definition/explanation of this specific topic
 - Why this topic matters within the broader concept
 - Key points or principles for this topic
 - Brief practical example or application
 - How this topic connects to the overall concept
-` : `
+`
+    : `
 - Clear definition and explanation of the concept
 - Why this concept is important  
 - Key principles or components
@@ -245,7 +248,8 @@ ${isTopicSpecific ? `
 - How it relates to other concepts in the field
 - Common misconceptions or challenges
 - Further learning resources
-`}
+`
+}
 
 Use proper Markdown formatting:
 - **Bold** for important terms and section headers
