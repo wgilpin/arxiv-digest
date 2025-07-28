@@ -194,7 +194,6 @@ Concept: ${concept}
         }
       } catch (parseError) {
         console.error('Failed to parse lesson topics JSON:', parseError);
-        console.error('Problematic JSON string:', jsonString);
         console.error('Raw response was:', response);
         
         // Try to extract topics from raw text as fallback

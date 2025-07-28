@@ -7,6 +7,7 @@
   <link href="https://cdn.jsdelivr.net/npm/daisyui@5" rel="stylesheet" type="text/css" />
   <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
   <link href="https://cdn.jsdelivr.net/npm/daisyui@5/themes.css" rel="stylesheet" type="text/css" />
+  <script src="/socket.io/socket.io.js"></script>
 </head>
 <body>
   <div class="container mx-auto p-4">
@@ -29,66 +30,107 @@
   </div>
 
   <script>
-    let checkCount = 0;
-    const maxChecks = 60; // 60 checks * 2 seconds = 2 minutes max
+    let socket = null;
+    let timeoutTimer = null;
+    const maxWaitTime = 120000; // 2 minutes max
+    const lessonId = {{lessonId}};
+    const courseId = {{courseId}};
     
-    async function checkLessonReady() {
-      checkCount++;
+    function initializeWebSocket() {
+      socket = io();
       
-      try {
-        const response = await fetch('/courses/lessons/{{lessonId}}');
-        const text = await response.text();
+      socket.on('connect', () => {
+        console.log('WebSocket connected - waiting for lesson generation');
+        // Join the course room for updates
+        socket.emit('joinCourse', courseId.toString());
         
-        // Check if we got the loading page or actual content
-        if (response.ok && !text.includes('Generating lesson content')) {
+        // Set timeout for generation
+        timeoutTimer = setTimeout(() => {
+          showTimeout();
+        }, maxWaitTime);
+      });
+
+      socket.on('disconnect', () => {
+        console.log('WebSocket disconnected');
+      });
+
+      // Listen for lesson content generated
+      socket.on('lessonContentGenerated', (data) => {
+        console.log('Lesson content generated:', data);
+        if (data.lessonId === lessonId) {
+          console.log('Our lesson is ready! Reloading page...');
+          clearTimeout(timeoutTimer);
           // Lesson is ready, reload the page to show content
           window.location.reload();
-          return true;
-        } else if (checkCount >= maxChecks) {
-          // Timeout - show error
-          document.body.innerHTML = `
-            <div class="container mx-auto p-4">
-              <div class="alert alert-error">
-                <div>
-                  <div class="font-semibold">Generation timed out</div>
-                  <div class="text-sm">Please try again later or <a href="/courses/{{courseId}}" class="link">return to course</a>.</div>
-                </div>
-              </div>
-            </div>
-          `;
-          return true; // Stop polling on timeout
         }
-        return false; // Continue polling
-      } catch (error) {
-        console.error('Error checking lesson status:', error);
-        if (checkCount >= maxChecks) {
-          // Show error after timeout
-          document.body.innerHTML = `
-            <div class="container mx-auto p-4">
-              <div class="alert alert-error">
-                <div>
-                  <div class="font-semibold">Error checking lesson status</div>
-                  <div class="text-sm">Please <a href="/courses/{{courseId}}" class="link">return to course</a> and try again.</div>
-                </div>
-              </div>
-            </div>
-          `;
-          return true; // Stop polling on error timeout
+      });
+
+      socket.on('connect_error', (error) => {
+        console.error('WebSocket connection error:', error);
+        // Fallback to polling if WebSocket fails
+        startPollingFallback();
+      });
+    }
+
+    function startPollingFallback() {
+      console.log('WebSocket failed, falling back to polling');
+      let checkCount = 0;
+      const maxChecks = 60; // 60 checks * 2 seconds = 2 minutes max
+      
+      const checkInterval = setInterval(async () => {
+        checkCount++;
+        
+        try {
+          const response = await fetch('/courses/lessons/{{lessonId}}');
+          const text = await response.text();
+          
+          // Check if we got the loading page or actual content
+          if (response.ok && !text.includes('Generating lesson content')) {
+            clearInterval(checkInterval);
+            clearTimeout(timeoutTimer);
+            // Lesson is ready, reload the page to show content
+            window.location.reload();
+          } else if (checkCount >= maxChecks) {
+            clearInterval(checkInterval);
+            showTimeout();
+          }
+        } catch (error) {
+          console.error('Error checking lesson status:', error);
+          if (checkCount >= maxChecks) {
+            clearInterval(checkInterval);
+            showTimeout();
+          }
         }
-        return false; // Continue polling on error
-      }
+      }, 2000);
+    }
+
+    function showTimeout() {
+      document.body.innerHTML = `
+        <div class="container mx-auto p-4">
+          <div class="alert alert-error">
+            <div>
+              <div class="font-semibold">Generation timed out</div>
+              <div class="text-sm">Please try again later or <a href="/courses/{{courseId}}" class="link">return to course</a>.</div>
+            </div>
+          </div>
+        </div>
+      `;
     }
     
-    // Start checking after 5 seconds, then every 2 seconds
-    setTimeout(() => {
-      const checkInterval = setInterval(() => {
-        checkLessonReady().then(ready => {
-          if (ready || checkCount >= maxChecks) {
-            clearInterval(checkInterval);
-          }
-        });
-      }, 2000);
-    }, 5000);
+    // Start WebSocket connection immediately
+    window.addEventListener('load', () => {
+      initializeWebSocket();
+    });
+
+    // Clean up on page unload
+    window.addEventListener('beforeunload', () => {
+      if (socket) {
+        socket.disconnect();
+      }
+      if (timeoutTimer) {
+        clearTimeout(timeoutTimer);
+      }
+    });
   </script>
 </body>
 </html>]]>

@@ -7,6 +7,7 @@
   <link href="https://cdn.jsdelivr.net/npm/daisyui@5" rel="stylesheet" type="text/css" />
   <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
   <link href="https://cdn.jsdelivr.net/npm/daisyui@5/themes.css" rel="stylesheet" type="text/css" />
+  <script src="/socket.io/socket.io.js"></script>
 </head>
 <body>
   <div class="container mx-auto p-4">
@@ -17,8 +18,8 @@
   </div>
 
   <script>
-    let lastLessonCount = 0;
     let courseId = null;
+    let socket = null;
     
     // Extract course ID from current URL
     const pathParts = window.location.pathname.split('/');
@@ -26,66 +27,58 @@
       courseId = pathParts[2];
     }
 
-    async function checkForUpdates() {
-      if (!courseId) return;
-      
-      try {
-        const response = await fetch(`/courses/${courseId}/status`);
-        if (!response.ok) {
-          console.error('Status check failed:', response.status);
-          return;
-        }
-        
-        const status = await response.json();
-        console.log('Status check result:', {
-          totalModules: status.totalModules,
-          completedModules: status.completedModules,
-          totalLessonTitles: status.totalLessonTitles,
-          totalLessonsWithContent: status.totalLessonsWithContent,
-          lastLessonCount: lastLessonCount,
-          modules: status.modules.map(m => ({ 
-            index: m.orderIndex, 
-            title: m.title, 
-            hasContent: m.hasContent, 
-            lessonCount: m.lessonCount,
-            lessonsWithContent: m.lessonsWithContent
-          }))
-        });
-        
-        const currentLessonCount = status.totalLessonsWithContent;
-        
-        // If we have more completed lessons than before, update content dynamically
-        if (currentLessonCount > lastLessonCount) {
-          console.log(`New lessons ready (${currentLessonCount} vs ${lastLessonCount}), updating content...`);
-          lastLessonCount = currentLessonCount;
-          
-          // Update the modules content dynamically instead of full refresh
-          await updateModulesContent();
-        } else {
-          console.log(`No new lessons yet. Completed: ${currentLessonCount}, Last: ${lastLessonCount}`);
-        }
-
-        // Stop polling when there's no immediate lesson being generated
-        // We only care about the NEXT lesson in sequence, not all future lessons
-        const hasImmediateGeneration = status.modules
-          .filter(m => m.hasContent) // Only modules with lesson titles
-          .some(m => {
-            // Check if this module has some lessons but is missing the next one in sequence
-            return m.lessonsWithContent > 0 && m.lessonsWithContent < Math.min(2, m.lessonCount);
-          });
-        
-        if (!hasImmediateGeneration && currentLessonCount > 0) {
-          console.log('No immediate lesson generation happening, stopping polling');
-          // Update UI one final time to remove any remaining spinners
-          await updateModulesContent();
-          return false;
-        }
-        
-        return true;
-      } catch (error) {
-        console.error('Error checking for updates:', error);
-        return true; // Continue polling on error
+    // Initialize WebSocket connection
+    function initializeWebSocket() {
+      if (!courseId) {
+        console.error('No course ID found');
+        return;
       }
+
+      socket = io();
+      
+      socket.on('connect', () => {
+        console.log('WebSocket connected');
+        // Join the course room for updates
+        socket.emit('joinCourse', courseId);
+      });
+
+      socket.on('disconnect', () => {
+        console.log('WebSocket disconnected');
+      });
+
+      // Listen for lesson titles generated
+      socket.on('lessonTitlesGenerated', (data) => {
+        console.log('Lesson titles generated:', data);
+        updateModulesContent();
+      });
+
+      // Listen for lesson content generated
+      socket.on('lessonContentGenerated', (data) => {
+        console.log('Lesson content generated:', data);
+        updateModulesContent();
+      });
+
+      // Listen for generation started events
+      socket.on('generationStarted', (data) => {
+        console.log('Generation started:', data);
+        updateModulesContent();
+      });
+
+      // Listen for generation completed events
+      socket.on('generationCompleted', (data) => {
+        console.log('Generation completed:', data);
+        updateModulesContent();
+      });
+
+      // Listen for course status updates
+      socket.on('courseStatusUpdate', (data) => {
+        console.log('Course status update:', data);
+        updateModulesContent();
+      });
+
+      socket.on('connect_error', (error) => {
+        console.error('WebSocket connection error:', error);
+      });
     }
 
     // Updates modules content dynamically while preserving collapsible state
@@ -136,58 +129,23 @@
             checkbox.checked = wasExpanded;
           });
           
-          console.log('Modules content updated dynamically with state preservation');
+          console.log('Modules content updated via WebSocket');
         }
       } catch (error) {
         console.error('Error updating modules content:', error);
       }
     }
 
-    // Initialize with current lesson count from API, not DOM
-    async function initializeLessonCount() {
-      if (!courseId) return;
-      
-      try {
-        const response = await fetch(`/courses/${courseId}/status`);
-        if (response.ok) {
-          const status = await response.json();
-          lastLessonCount = status.totalLessonsWithContent;
-          console.log(`Initial lessons with content from API: ${lastLessonCount}`);
-        } else {
-          // Fallback to DOM counting
-          const lessonLinks = document.querySelectorAll('a[href*="/courses/lessons/"]');
-          lastLessonCount = lessonLinks.length;
-          console.log(`Initial lesson count from DOM fallback: ${lastLessonCount}`);
-        }
-      } catch (error) {
-        console.error('Error initializing lesson count:', error);
-        lastLessonCount = 0; // Safe fallback
-      }
-    }
+    // Start WebSocket connection after page loads
+    window.addEventListener('load', () => {
+      initializeWebSocket();
+    });
 
-    // Start monitoring after page loads
-    window.addEventListener('load', async () => {
-      await initializeLessonCount();
-      
-      // Check for updates every 3 seconds, but stop when nothing left to generate
-      let pollInterval = setInterval(async () => {
-        const shouldContinue = await checkForUpdates();
-        if (shouldContinue === false) {
-          clearInterval(pollInterval);
-          console.log('Polling stopped - all content ready');
-        }
-      }, 3000);
-      
-      // Also check when page becomes visible (user switches back to tab)
-      document.addEventListener('visibilitychange', async () => {
-        if (!document.hidden && pollInterval) {
-          const shouldContinue = await checkForUpdates();
-          if (shouldContinue === false) {
-            clearInterval(pollInterval);
-            console.log('Polling stopped - all content ready');
-          }
-        }
-      });
+    // Clean up WebSocket connection when page unloads
+    window.addEventListener('beforeunload', () => {
+      if (socket) {
+        socket.disconnect();
+      }
     });
   </script>
 </body>

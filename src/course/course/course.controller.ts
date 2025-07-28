@@ -97,18 +97,18 @@ export class CourseController {
       return res.status(404).send('Course not found');
     }
 
-    // First, prepare lesson 1 content immediately, then generate remaining titles
-    setImmediate(() => {
-      this.courseService
-        .prepareNextLesson(id)
-        .then(() => {
-          // After lesson 1 is ready, generate remaining lesson titles
-          return this.courseService.generateRemainingLessonTitles(id);
-        })
-        .catch((error) => {
-          console.error('Course initialization failed:', error);
-        });
-    });
+    // Start lesson content generation before rendering page (so spinner shows)
+    const generationPromise = this.courseService
+      .prepareNextLesson(id)
+      .then(() => {
+        // Generate remaining lesson titles for modules that don't have them yet
+        return this.courseService.generateRemainingLessonTitles(id);
+      })
+      .catch((error) => {
+        console.error('Course initialization failed:', error);
+      });
+
+    // Don't wait for generation to complete, but ensure it starts before rendering
 
     let modulesHtml = '';
     if (course.modules && course.modules.length > 0) {
@@ -116,15 +116,34 @@ export class CourseController {
         .sort((a, b) => a.orderIndex - b.orderIndex)
         .map((module: Module) => {
           const hasLessons = module.lessons && module.lessons.length > 0;
-          // Only show module spinner if module has no lessons (still generating titles)
-          const showSpinner = !hasLessons;
+          
+          // Check if this module is actively generating lesson content
+          let showModuleSpinner = false;
+          if (hasLessons) {
+            // Find the next lesson that should be generated globally
+            const allLessons = course.modules
+              ?.flatMap(m => (m.lessons || []).map(l => ({ ...l, moduleOrderIndex: m.orderIndex })))
+              .sort((a, b) => {
+                const moduleOrderDiff = a.moduleOrderIndex - b.moduleOrderIndex;
+                if (moduleOrderDiff !== 0) return moduleOrderDiff;
+                return a.orderIndex - b.orderIndex;
+              }) || [];
+            
+            const nextLessonToGenerate = allLessons.find(l => !l.content);
+            const hasAnyContent = allLessons.some(l => l.content !== null);
+            
+            // Show module spinner only if the next lesson to generate is in this module AND generation is active
+            showModuleSpinner = !!(nextLessonToGenerate && 
+                                   nextLessonToGenerate.moduleOrderIndex === module.orderIndex && 
+                                   hasAnyContent);
+          }
 
           return `
         <div class="collapse collapse-plus bg-base-200 mb-2">
           <input type="checkbox" /> 
           <div class="collapse-title text-xl font-medium">
             ${module.title}
-            ${showSpinner ? '<span class="loading loading-spinner loading-sm ml-2"></span>' : ''}
+            ${showModuleSpinner ? '<span class="loading loading-spinner loading-sm ml-2"></span>' : ''}
           </div>
           <div class="collapse-content"> 
             ${
@@ -140,29 +159,10 @@ export class CourseController {
                   const completedClass = isCompleted ? 'btn-success' : hasContent ? 'btn-primary' : 'btn-outline btn-secondary';
                   const completedIcon = isCompleted ? '<span class="mr-2">✓</span>' : '';
                   
-                  // Only show spinner on the very next lesson being generated
+                  // Only show spinner on lessons that are actually being generated
                   let loadingIcon = '';
-                  if (!hasContent) {
-                    // Find the next lesson that should be generated
-                    const allLessons = course.modules
-                      ?.flatMap(m => (m.lessons || []).map(l => ({ ...l, moduleOrderIndex: m.orderIndex })))
-                      .sort((a, b) => {
-                        const moduleOrderDiff = a.moduleOrderIndex - b.moduleOrderIndex;
-                        if (moduleOrderDiff !== 0) return moduleOrderDiff;
-                        return a.orderIndex - b.orderIndex;
-                      }) || [];
-                    
-                    const nextLessonToGenerate = allLessons.find(l => !l.content);
-                    const hasAnyContent = allLessons.some(l => l.content !== null);
-                    
-                    // Show spinner only if: 
-                    // 1. This is the very next lesson globally
-                    // 2. At least one lesson has content (so generation is active)
-                    if (nextLessonToGenerate && 
-                        nextLessonToGenerate.id === lesson.id && 
-                        hasAnyContent) {
-                      loadingIcon = '<span class="loading loading-spinner loading-xs ml-2"></span>';
-                    }
+                  if (!hasContent && this.courseService.isLessonBeingGenerated(lesson.id)) {
+                    loadingIcon = '<span class="loading loading-spinner loading-xs ml-2"></span>';
                   }
 
                   return `
@@ -293,15 +293,34 @@ export class CourseController {
         .sort((a, b) => a.orderIndex - b.orderIndex)
         .map((module: Module) => {
           const hasLessons = module.lessons && module.lessons.length > 0;
-          // Only show module spinner if module has no lessons (still generating titles)
-          const showSpinner = !hasLessons;
+          
+          // Check if this module is actively generating lesson content
+          let showModuleSpinner = false;
+          if (hasLessons) {
+            // Find the next lesson that should be generated globally
+            const allLessons = course.modules
+              ?.flatMap(m => (m.lessons || []).map(l => ({ ...l, moduleOrderIndex: m.orderIndex })))
+              .sort((a, b) => {
+                const moduleOrderDiff = a.moduleOrderIndex - b.moduleOrderIndex;
+                if (moduleOrderDiff !== 0) return moduleOrderDiff;
+                return a.orderIndex - b.orderIndex;
+              }) || [];
+            
+            const nextLessonToGenerate = allLessons.find(l => !l.content);
+            const hasAnyContent = allLessons.some(l => l.content !== null);
+            
+            // Show module spinner only if the next lesson to generate is in this module AND generation is active
+            showModuleSpinner = !!(nextLessonToGenerate && 
+                                   nextLessonToGenerate.moduleOrderIndex === module.orderIndex && 
+                                   hasAnyContent);
+          }
 
           return `
         <div class="collapse collapse-plus bg-base-200 mb-2" data-module-id="${module.id}">
           <input type="checkbox" /> 
           <div class="collapse-title text-xl font-medium">
             ${module.title}
-            ${showSpinner ? '<span class="loading loading-spinner loading-sm ml-2"></span>' : ''}
+            ${showModuleSpinner ? '<span class="loading loading-spinner loading-sm ml-2"></span>' : ''}
           </div>
           <div class="collapse-content"> 
             ${
@@ -317,29 +336,10 @@ export class CourseController {
                   const completedClass = isCompleted ? 'btn-success' : hasContent ? 'btn-primary' : 'btn-outline btn-secondary';
                   const completedIcon = isCompleted ? '<span class="mr-2">✓</span>' : '';
                   
-                  // Only show spinner on the very next lesson being generated
+                  // Only show spinner on lessons that are actually being generated
                   let loadingIcon = '';
-                  if (!hasContent) {
-                    // Find the next lesson that should be generated
-                    const allLessons = course.modules
-                      ?.flatMap(m => (m.lessons || []).map(l => ({ ...l, moduleOrderIndex: m.orderIndex })))
-                      .sort((a, b) => {
-                        const moduleOrderDiff = a.moduleOrderIndex - b.moduleOrderIndex;
-                        if (moduleOrderDiff !== 0) return moduleOrderDiff;
-                        return a.orderIndex - b.orderIndex;
-                      }) || [];
-                    
-                    const nextLessonToGenerate = allLessons.find(l => !l.content);
-                    const hasAnyContent = allLessons.some(l => l.content !== null);
-                    
-                    // Show spinner only if: 
-                    // 1. This is the very next lesson globally
-                    // 2. At least one lesson has content (so generation is active)
-                    if (nextLessonToGenerate && 
-                        nextLessonToGenerate.id === lesson.id && 
-                        hasAnyContent) {
-                      loadingIcon = '<span class="loading loading-spinner loading-xs ml-2"></span>';
-                    }
+                  if (!hasContent && this.courseService.isLessonBeingGenerated(lesson.id)) {
+                    loadingIcon = '<span class="loading loading-spinner loading-xs ml-2"></span>';
                   }
 
                   return `
@@ -409,9 +409,11 @@ export class CourseController {
 
     // Prepare next lesson when user accesses a lesson
     const courseId = lesson.module.course.id;
+    console.log(`User accessed lesson ${lesson.id} (${lesson.title}), triggering background generation for course ${courseId}`);
+    
     setImmediate(() => {
       this.courseService.prepareNextLesson(courseId).catch((error) => {
-        console.error('Lesson preparation failed:', error);
+        console.error('Background lesson preparation failed:', error);
       });
     });
 
@@ -458,7 +460,17 @@ export class CourseController {
       // Get the lesson to find the course ID for redirect
       const lesson = await this.courseService.findLessonById(lessonId);
       if (lesson) {
-        res.redirect(`/courses/${lesson.module.course.id}`);
+        const courseId = lesson.module.course.id;
+        console.log(`User completed lesson ${lessonId} (${lesson.title}), triggering background generation for course ${courseId}`);
+        
+        // Trigger background generation of next lesson
+        setImmediate(() => {
+          this.courseService.prepareNextLesson(courseId).catch((error) => {
+            console.error('Background lesson preparation after completion failed:', error);
+          });
+        });
+        
+        res.redirect(`/courses/${courseId}`);
       } else {
         res.status(404).send('Lesson not found');
       }

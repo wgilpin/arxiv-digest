@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Inject, forwardRef } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Course } from '../../database/entities/course.entity';
@@ -6,10 +6,12 @@ import { Module as CourseModuleEntity } from '../../database/entities/module.ent
 import { Lesson } from '../../database/entities/lesson.entity';
 import { Progress } from '../../database/entities/progress.entity';
 import { GenerationService } from '../../generation/generation/generation.service';
+import { CourseGateway } from './course.gateway';
 
 @Injectable()
 export class CourseService {
   private generationLocks = new Map<string, boolean>();
+  private currentGeneratingLessons = new Map<number, boolean>(); // lessonId -> isGenerating
 
   constructor(
     @InjectRepository(Course)
@@ -21,7 +23,16 @@ export class CourseService {
     @InjectRepository(Progress)
     private progressRepository: Repository<Progress>,
     private generationService: GenerationService,
+    @Inject(forwardRef(() => CourseGateway))
+    private courseGateway: CourseGateway,
   ) {}
+
+  /**
+   * Check if a specific lesson is currently being generated
+   */
+  isLessonBeingGenerated(lessonId: number): boolean {
+    return this.currentGeneratingLessons.get(lessonId) === true;
+  }
 
   async generateSyllabus(
     courseId: number,
@@ -90,6 +101,21 @@ export class CourseService {
             `Created lesson placeholder: ${lessonTitle} (module 0, lesson ${lessonIndex})`,
           );
         }
+
+        // Emit WebSocket event for lesson titles generated
+        this.courseGateway.emitLessonTitlesGenerated(
+          courseId,
+          firstModule.id,
+          firstModule.title,
+          lessonTopics.length,
+        );
+
+        // Immediately start generating lesson 1 content
+        console.log('Lesson titles created for module 1, starting lesson 1 content generation');
+        // Start lesson 1 generation immediately (no setImmediate to ensure spinner shows)
+        this.prepareNextLesson(courseId).catch((error) => {
+          console.error('Failed to start lesson 1 generation after syllabus creation:', error);
+        });
       }
     }
   }
@@ -152,6 +178,13 @@ export class CourseService {
         console.log(
           `Generating lesson titles for module ${moduleIndex}: ${concept}`,
         );
+
+        // Emit WebSocket event for title generation started
+        this.courseGateway.emitGenerationStarted(course.id, 'lesson-titles', {
+          moduleId: module.id,
+          moduleTitle: module.title,
+          moduleOrderIndex: moduleIndex,
+        });
         const lessonTopics =
           await this.generationService.generateLessonTopics(concept);
 
@@ -173,6 +206,16 @@ export class CourseService {
             `Created lesson placeholder: ${lessonTitle} (module ${moduleIndex}, lesson ${lessonIndex})`,
           );
         }
+
+        // Emit WebSocket event for lesson titles generated
+        this.courseGateway.emitLessonTitlesGenerated(
+          course.id,
+          module.id,
+          module.title,
+          lessonTopics.length,
+        );
+
+        // Lesson titles created - content will be generated when user opens previous lessons
       }
 
       console.log('Completed generating remaining lesson titles');
@@ -191,6 +234,7 @@ export class CourseService {
    */
   async prepareNextLesson(courseId: number): Promise<void> {
     const lockKey = `prepare-${courseId}`;
+    let currentLessonId: number | null = null;
 
     // Prevent multiple simultaneous preparations for the same course
     if (this.generationLocks.get(lockKey)) {
@@ -228,16 +272,34 @@ export class CourseService {
         return a.lesson.orderIndex - b.lesson.orderIndex;
       });
 
+      console.log(`Found ${allLessons.length} total lessons for course ${courseId}`);
+      
       // Find first lesson without content
       const nextLessonItem = allLessons.find((item) => !item.lesson.content);
 
       if (!nextLessonItem) {
-        console.log(`All lessons have content for course ${courseId}`);
+        if (allLessons.length === 0) {
+          console.log(`No lessons found for course ${courseId} - triggering lesson title generation`);
+          // No lessons exist yet, trigger lesson title generation for remaining modules
+          this.generateRemainingLessonTitles(courseId).catch((error) => {
+            console.error('Failed to generate remaining lesson titles:', error);
+          });
+        } else {
+          console.log(`All ${allLessons.length} lessons have content for course ${courseId}`);
+        }
         return;
       }
 
       const nextLesson = nextLessonItem.lesson;
       const moduleOrderIndex = nextLessonItem.moduleOrderIndex;
+      currentLessonId = nextLesson.id;
+
+      // Find the actual module entity
+      const module = course.modules?.find(m => m.orderIndex === moduleOrderIndex);
+      if (!module) {
+        console.error(`Could not find module for order index ${moduleOrderIndex}`);
+        return;
+      }
 
       const moduleConcept =
         course.plannedConcepts?.split(',')[moduleOrderIndex];
@@ -249,6 +311,16 @@ export class CourseService {
       console.log(
         `Preparing lesson: ${nextLesson.title} (course ${courseId}, module ${moduleOrderIndex}, lesson ${nextLesson.orderIndex})`,
       );
+
+      // Mark this lesson as being generated
+      this.currentGeneratingLessons.set(nextLesson.id, true);
+
+      // Emit generation started event
+      this.courseGateway.emitGenerationStarted(courseId, 'lesson-content', {
+        lessonId: nextLesson.id,
+        lessonTitle: nextLesson.title,
+        moduleOrderIndex,
+      });
 
       // Generate content for this lesson
       const lessonContent = await this.generationService.generateLessonContent(
@@ -262,6 +334,19 @@ export class CourseService {
       await this.lessonRepository.save(nextLesson);
 
       console.log(`Lesson content prepared: ${nextLesson.title}`);
+
+      // Mark this lesson as no longer being generated
+      this.currentGeneratingLessons.delete(nextLesson.id);
+
+      // Emit WebSocket event for lesson content generated
+      this.courseGateway.emitLessonContentGenerated(
+        courseId,
+        nextLesson.id,
+        nextLesson.title,
+        module.id,
+      );
+
+      // Lesson completed - next lesson will be generated when user opens this one
     } catch (error) {
       console.error(
         `Error preparing next lesson for course ${courseId}:`,
@@ -269,6 +354,10 @@ export class CourseService {
       );
     } finally {
       this.generationLocks.delete(lockKey);
+      // Clean up generation tracking in case of error
+      if (currentLessonId) {
+        this.currentGeneratingLessons.delete(currentLessonId);
+      }
     }
   }
 
@@ -315,6 +404,16 @@ export class CourseService {
         `Generating specific lesson: ${lesson.title} (lesson ${lessonId}, module ${moduleOrderIndex})`,
       );
 
+      // Mark this lesson as being generated
+      this.currentGeneratingLessons.set(lesson.id, true);
+
+      // Emit generation started event
+      this.courseGateway.emitGenerationStarted(course.id, 'lesson-content', {
+        lessonId: lesson.id,
+        lessonTitle: lesson.title,
+        moduleOrderIndex,
+      });
+
       // Generate content for this lesson
       const lessonContent = await this.generationService.generateLessonContent(
         moduleConcept,
@@ -327,10 +426,25 @@ export class CourseService {
       await this.lessonRepository.save(lesson);
 
       console.log(`Specific lesson content generated: ${lesson.title}`);
+
+      // Mark this lesson as no longer being generated
+      this.currentGeneratingLessons.delete(lesson.id);
+
+      // Emit WebSocket event for lesson content generated
+      this.courseGateway.emitLessonContentGenerated(
+        course.id,
+        lesson.id,
+        lesson.title,
+        lesson.module.id,
+      );
+
+      // Lesson completed - next lesson will be generated when user opens this one
     } catch (error) {
       console.error(`Error generating specific lesson ${lessonId}:`, error);
     } finally {
       this.generationLocks.delete(lockKey);
+      // Clean up generation tracking in case of error
+      this.currentGeneratingLessons.delete(lessonId);
     }
   }
 

@@ -7,14 +7,15 @@ import { Lesson } from '../database/entities/lesson.entity';
 import { Progress } from '../database/entities/progress.entity';
 import { GenerationModule } from '../generation/generation.module';
 import { CourseController } from './course/course.controller';
+import { CourseGateway } from './course/course.gateway';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Course, CourseModuleEntity, Lesson, Progress]),
     GenerationModule,
   ],
-  providers: [CourseService],
-  exports: [CourseService],
+  providers: [CourseService, CourseGateway],
+  exports: [CourseService, CourseGateway],
   controllers: [CourseController],
 })
 export class CourseModule {}
