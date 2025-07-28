@@ -217,7 +217,7 @@ export class CourseController {
 
     const plannedConcepts: string[] =
       typeof course.plannedConcepts === 'string'
-        ? (course.plannedConcepts as string).split(',')
+        ? (course.plannedConcepts).split(',')
         : Array.isArray(course.plannedConcepts)
           ? (course.plannedConcepts as string[])
           : [];
@@ -230,7 +230,7 @@ export class CourseController {
             !!l &&
             typeof l === 'object' &&
             'content' in l &&
-            (l as Lesson).content !== null,
+            (l).content !== null,
         ).length || 0;
       const hasContent = totalLessons > 0;
 
