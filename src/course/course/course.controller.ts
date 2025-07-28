@@ -1,3 +1,4 @@
+/* eslint-disable prettier/prettier */
 /* eslint-disable no-useless-escape */
 import { Controller, Get, Post, Param, Res } from '@nestjs/common';
 import { Response } from 'express';
@@ -115,10 +116,8 @@ export class CourseController {
         .sort((a, b) => a.orderIndex - b.orderIndex)
         .map((module: Module) => {
           const hasLessons = module.lessons && module.lessons.length > 0;
-          const isGeneratingTitles = !hasLessons;
-          const isGeneratingContent =
-            hasLessons && module.lessons.every((l) => !l.content);
-          const showSpinner = isGeneratingTitles || isGeneratingContent;
+          // Only show module spinner if module has no lessons (still generating titles)
+          const showSpinner = !hasLessons;
 
           return `
         <div class="collapse collapse-plus bg-base-200 mb-2">
@@ -134,15 +133,37 @@ export class CourseController {
             <ul class="space-y-1">
               ${module.lessons
                 .sort((a, b) => a.orderIndex - b.orderIndex)
-                .map((lesson: Lesson) => {
+                .map((lesson: Lesson, index: number) => {
                   const isCompleted =
                     lesson.progress && lesson.progress.length > 0;
                   const hasContent = lesson.content !== null;
                   const completedClass = isCompleted ? 'btn-success' : hasContent ? 'btn-primary' : 'btn-outline btn-secondary';
                   const completedIcon = isCompleted ? '<span class="mr-2">✓</span>' : '';
-                  const loadingIcon = !hasContent
-                    ? '<span class="loading loading-spinner loading-xs ml-2"></span>'
-                    : '';
+                  
+                  // Only show spinner on the very next lesson being generated
+                  let loadingIcon = '';
+                  if (!hasContent) {
+                    // Find the next lesson that should be generated
+                    const allLessons = course.modules
+                      ?.flatMap(m => (m.lessons || []).map(l => ({ ...l, moduleOrderIndex: m.orderIndex })))
+                      .sort((a, b) => {
+                        const moduleOrderDiff = a.moduleOrderIndex - b.moduleOrderIndex;
+                        if (moduleOrderDiff !== 0) return moduleOrderDiff;
+                        return a.orderIndex - b.orderIndex;
+                      }) || [];
+                    
+                    const nextLessonToGenerate = allLessons.find(l => !l.content);
+                    const hasAnyContent = allLessons.some(l => l.content !== null);
+                    
+                    // Show spinner only if: 
+                    // 1. This is the very next lesson globally
+                    // 2. At least one lesson has content (so generation is active)
+                    if (nextLessonToGenerate && 
+                        nextLessonToGenerate.id === lesson.id && 
+                        hasAnyContent) {
+                      loadingIcon = '<span class="loading loading-spinner loading-xs ml-2"></span>';
+                    }
+                  }
 
                   return `
                 <li class="mb-2">
@@ -272,10 +293,8 @@ export class CourseController {
         .sort((a, b) => a.orderIndex - b.orderIndex)
         .map((module: Module) => {
           const hasLessons = module.lessons && module.lessons.length > 0;
-          const isGeneratingTitles = !hasLessons;
-          const isGeneratingContent =
-            hasLessons && module.lessons.every((l) => !l.content);
-          const showSpinner = isGeneratingTitles || isGeneratingContent;
+          // Only show module spinner if module has no lessons (still generating titles)
+          const showSpinner = !hasLessons;
 
           return `
         <div class="collapse collapse-plus bg-base-200 mb-2" data-module-id="${module.id}">
@@ -291,15 +310,37 @@ export class CourseController {
             <ul class="space-y-1">
               ${module.lessons
                 .sort((a, b) => a.orderIndex - b.orderIndex)
-                .map((lesson: Lesson) => {
+                .map((lesson: Lesson, index: number) => {
                   const isCompleted =
                     lesson.progress && lesson.progress.length > 0;
                   const hasContent = lesson.content !== null;
                   const completedClass = isCompleted ? 'btn-success' : hasContent ? 'btn-primary' : 'btn-outline btn-secondary';
                   const completedIcon = isCompleted ? '<span class="mr-2">✓</span>' : '';
-                  const loadingIcon = !hasContent
-                    ? '<span class="loading loading-spinner loading-xs ml-2"></span>'
-                    : '';
+                  
+                  // Only show spinner on the very next lesson being generated
+                  let loadingIcon = '';
+                  if (!hasContent) {
+                    // Find the next lesson that should be generated
+                    const allLessons = course.modules
+                      ?.flatMap(m => (m.lessons || []).map(l => ({ ...l, moduleOrderIndex: m.orderIndex })))
+                      .sort((a, b) => {
+                        const moduleOrderDiff = a.moduleOrderIndex - b.moduleOrderIndex;
+                        if (moduleOrderDiff !== 0) return moduleOrderDiff;
+                        return a.orderIndex - b.orderIndex;
+                      }) || [];
+                    
+                    const nextLessonToGenerate = allLessons.find(l => !l.content);
+                    const hasAnyContent = allLessons.some(l => l.content !== null);
+                    
+                    // Show spinner only if: 
+                    // 1. This is the very next lesson globally
+                    // 2. At least one lesson has content (so generation is active)
+                    if (nextLessonToGenerate && 
+                        nextLessonToGenerate.id === lesson.id && 
+                        hasAnyContent) {
+                      loadingIcon = '<span class="loading loading-spinner loading-xs ml-2"></span>';
+                    }
+                  }
 
                   return `
                 <li class="mb-2">

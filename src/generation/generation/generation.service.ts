@@ -172,14 +172,47 @@ Concept: ${concept}
         // Normalize quotes to handle smart quotes from AI models
         jsonString = jsonString
           .replace(/[""]/g, '"') // Convert smart quotes to straight quotes
-          .replace(/['']/g, "'"); // Convert smart single quotes too
+          .replace(/['']/g, "'") // Convert smart single quotes too
+          .replace(/[\u2018\u2019]/g, "'") // Additional smart quote variants
+          .replace(/[\u201C\u201D]/g, '"') // Additional smart quote variants
+          .trim();
 
+        // Additional JSON cleaning
+        jsonString = jsonString
+          .replace(/,\s*([}\]])/g, '$1') // Remove trailing commas
+          .replace(/([{\[,])\s*,/g, '$1') // Remove leading commas
+          .replace(/,+/g, ','); // Replace multiple commas with single
+
+        console.log('Raw AI response:', response);
+        console.log('Cleaned JSON string:', jsonString);
+        console.log('JSON string length:', jsonString.length);
+        console.log('First 50 chars:', jsonString.substring(0, 50));
+        
         const topics = JSON.parse(jsonString) as unknown[];
         if (Array.isArray(topics) && topics.length > 0) {
           return (topics as string[]).slice(0, 5); // Limit to 5 lessons max per module
         }
       } catch (parseError) {
         console.error('Failed to parse lesson topics JSON:', parseError);
+        console.error('Problematic JSON string:', jsonString);
+        console.error('Raw response was:', response);
+        
+        // Try to extract topics from raw text as fallback
+        const lines = response.split('\n').filter(line => line.trim().length > 0);
+        const extractedTopics = [];
+        
+        for (const line of lines) {
+          // Look for lines that might be lesson titles
+          const cleaned = line.replace(/^[-*•"\[\]0-9.\s]+/, '').replace(/["\[\],]+$/, '').trim();
+          if (cleaned.length > 5 && cleaned.length < 100 && !cleaned.includes('TITLE:') && !cleaned.includes('CONTENT:')) {
+            extractedTopics.push(cleaned);
+          }
+        }
+        
+        if (extractedTopics.length > 0) {
+          console.log('Extracted topics from raw text:', extractedTopics);
+          return extractedTopics.slice(0, 5);
+        }
       }
 
       // Fallback: provide generic breakdown

@@ -43,6 +43,7 @@
         if (response.ok && !text.includes('Generating lesson content')) {
           // Lesson is ready, reload the page to show content
           window.location.reload();
+          return true;
         } else if (checkCount >= maxChecks) {
           // Timeout - show error
           document.body.innerHTML = `
@@ -55,7 +56,9 @@
               </div>
             </div>
           `;
+          return true; // Stop polling on timeout
         }
+        return false; // Continue polling
       } catch (error) {
         console.error('Error checking lesson status:', error);
         if (checkCount >= maxChecks) {
@@ -70,13 +73,21 @@
               </div>
             </div>
           `;
+          return true; // Stop polling on error timeout
         }
+        return false; // Continue polling on error
       }
     }
     
     // Start checking after 5 seconds, then every 2 seconds
     setTimeout(() => {
-      setInterval(checkLessonReady, 2000);
+      const checkInterval = setInterval(() => {
+        checkLessonReady().then(ready => {
+          if (ready || checkCount >= maxChecks) {
+            clearInterval(checkInterval);
+          }
+        });
+      }, 2000);
     }, 5000);
   </script>
 </body>

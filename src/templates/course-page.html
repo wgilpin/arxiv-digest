@@ -64,8 +64,27 @@
         } else {
           console.log(`No new lessons yet. Completed: ${currentLessonCount}, Last: ${lastLessonCount}`);
         }
+
+        // Stop polling when there's no immediate lesson being generated
+        // We only care about the NEXT lesson in sequence, not all future lessons
+        const hasImmediateGeneration = status.modules
+          .filter(m => m.hasContent) // Only modules with lesson titles
+          .some(m => {
+            // Check if this module has some lessons but is missing the next one in sequence
+            return m.lessonsWithContent > 0 && m.lessonsWithContent < Math.min(2, m.lessonCount);
+          });
+        
+        if (!hasImmediateGeneration && currentLessonCount > 0) {
+          console.log('No immediate lesson generation happening, stopping polling');
+          // Update UI one final time to remove any remaining spinners
+          await updateModulesContent();
+          return false;
+        }
+        
+        return true;
       } catch (error) {
         console.error('Error checking for updates:', error);
+        return true; // Continue polling on error
       }
     }
 
@@ -150,13 +169,23 @@
     window.addEventListener('load', async () => {
       await initializeLessonCount();
       
-      // Check for updates every 3 seconds
-      setInterval(checkForUpdates, 3000);
+      // Check for updates every 3 seconds, but stop when nothing left to generate
+      let pollInterval = setInterval(async () => {
+        const shouldContinue = await checkForUpdates();
+        if (shouldContinue === false) {
+          clearInterval(pollInterval);
+          console.log('Polling stopped - all content ready');
+        }
+      }, 3000);
       
       // Also check when page becomes visible (user switches back to tab)
-      document.addEventListener('visibilitychange', () => {
-        if (!document.hidden) {
-          checkForUpdates();
+      document.addEventListener('visibilitychange', async () => {
+        if (!document.hidden && pollInterval) {
+          const shouldContinue = await checkForUpdates();
+          if (shouldContinue === false) {
+            clearInterval(pollInterval);
+            console.log('Polling stopped - all content ready');
+          }
         }
       });
     });
