@@ -1,98 +1,104 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# ArXiv Paper Learning Tool
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+This project is an AI-powered learning assistant designed to help users understand academic papers from ArXiv. It works by identifying knowledge gaps, assessing the user's current understanding, and generating personalized learning paths to bridge those gaps.
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+## Features
 
-## Description
+- **Paper-Centric Learning**: Starts with a specific ArXiv paper you want to understand.
+- **Prerequisite Mapping**: Automatically identifies the key concepts and prerequisites needed to comprehend the paper.
+- **Knowledge Assessment**: Allows users to self-rate their familiarity with the identified concepts.
+- **Dynamic Syllabus Generation**: Creates a custom learning syllabus with lessons derived from paper references and Wikipedia.
+- **Course Management**: Save and manage multiple learning courses for different papers.
+- **Progress Tracking**: Keep track of completed lessons within a course.
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+## Tech Stack
 
-## Project setup
+- **Backend**: NestJS
+- **Database**: SQLite with TypeORM
+- **Frontend**: Server-rendered HTML with DaisyUI
+- **LLM Integration**: Google Gemini
+- **Dependencies**:
+  - `@nestjs/common`, `@nestjs/core`, `@nestjs/platform-express`, `@nestjs/typeorm`, `typeorm`, `sqlite3`
+  - `@google/generative-ai` for LLM integration
+  - `axios` for HTTP requests
+  - `marked` for markdown parsing
+  - `xml2js` for parsing ArXiv API responses
 
-```bash
-$ npm install
-```
+## Installation
 
-## Compile and run the project
+Follow these steps to set up the project locally.
 
-```bash
-# development
-$ npm run start
+1. **Clone the repository:**
 
-# watch mode
-$ npm run start:dev
+    ```bash
+    git clone <repository-url>
+    cd digest-js
+    ```
 
-# production mode
-$ npm run start:prod
-```
+2. **Install dependencies:**
+    This project uses `npm` for package management.
 
-## Run tests
+    ```bash
+    npm install
+    ```
 
-```bash
-# unit tests
-$ npm run test
+3. **Set up environment variables:**
+    Create a `.env` file in the root of the project by copying the example file:
 
-# e2e tests
-$ npm run test:e2e
+    ```bash
+    cp .env.example .env
+    ```
 
-# test coverage
-$ npm run test:cov
-```
+    You will need to add your Google Gemini API key to this file.
 
-## Deployment
+## Getting a Gemini API Key
 
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
+To use this application, you need a Google Gemini API key.
 
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+1. Go to the [Google AI Studio](https://aistudio.google.com/).
+2. Sign in with your Google account.
+3. Click on **"Get API key"** in the top left corner.
+4. Create a new API key in a new or existing project.
+5. Copy the generated API key.
+6. Open your `.env` file and paste the key as the value for `GEMINI_API_KEY`:
 
-```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
-```
+    ```
+    GEMINI_API_KEY=your_gemini_api_key_here
+    ```
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+## Usage
 
-## Resources
+Once the installation is complete, you can run the application using one of the following scripts.
 
-Check out a few resources that may come in handy when working with NestJS:
+- **Development mode:**
+    This will start the server with hot-reloading enabled.
 
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
+    ```bash
+    npm run start:dev
+    ```
 
-## Support
+- **Production mode:**
+    First, build the application:
 
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
+    ```bash
+    npm run build
+    ```
 
-## Stay in touch
+    Then, start the production server:
 
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
+    ```bash
+    npm run start:prod
+    ```
 
-## License
+The application will be available at `http://localhost:3000` by default (or the `PORT` specified in your `.env` file).
 
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+## Available Scripts
+
+- `npm run build`: Compiles the TypeScript code.
+- `npm run format`: Formats code using Prettier.
+- `npm run start`: Starts the application.
+- `npm run start:dev`: Starts the application in watch mode.
+- `npm run start:debug`: Starts the application in debug mode.
+- `npm run start:prod`: Starts the application in production mode.
+- `npm run lint`: Lints the codebase.
+- `npm run test`: Runs unit tests.
