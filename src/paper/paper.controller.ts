@@ -73,19 +73,6 @@ export class PaperController {
     res.send(html);
   }
 
-  @Delete('/courses/:id')
-  async deleteCourse(@Param('id') id: number, @Res() res: Response) {
-    try {
-      const course = await this.courseRepository.findOneBy({ id });
-      if (!course) {
-        throw new NotFoundException('Course not found');
-      }
-      await this.courseRepository.remove(course);
-      res.status(200).send({ message: 'Course deleted successfully' });
-    } catch (error) {
-      res.status(500).send({ message: 'Error deleting course' });
-    }
-  }
 
   @Post('/')
   async createCourse(@Body('arxivId') arxivId: string, @Res() res: Response) {

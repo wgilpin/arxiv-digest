@@ -1,5 +1,5 @@
 /* eslint-disable no-useless-escape */
-import { Controller, Get, Post, Param, Res } from '@nestjs/common';
+import { Controller, Get, Post, Delete, Param, Res } from '@nestjs/common';
 import { Response } from 'express';
 import { CourseService } from './course.service';
 import { Course } from '../../database/entities/course.entity';
@@ -10,7 +10,9 @@ import { marked } from 'marked';
 
 @Controller('courses')
 export class CourseController {
-  constructor(private readonly courseService: CourseService) {}
+  constructor(private readonly courseService: CourseService) {
+    console.log('CourseController initialized with DELETE route handler');
+  }
 
   /**
    * Converts mathematical notation from code tags to LaTeX format for MathJax
@@ -482,6 +484,25 @@ export class CourseController {
     } catch (error) {
       console.error('Error marking lesson complete:', error);
       res.status(500).send('Error marking lesson complete');
+    }
+  }
+
+  @Delete('/:id')
+  async deleteCourse(@Param('id') id: number, @Res() res: Response) {
+    console.log(`DELETE request received for course ID: ${id}`);
+    
+    try {
+      await this.courseService.deleteCourse(id);
+      console.log(`Successfully deleted course ${id}`);
+      res.status(200).json({ message: 'Course deleted successfully' });
+    } catch (error) {
+      console.error('Error deleting course:', error);
+      
+      if (error.message && error.message.includes('not found')) {
+        res.status(404).json({ error: 'Course not found' });
+      } else {
+        res.status(500).json({ error: 'Failed to delete course' });
+      }
     }
   }
 }

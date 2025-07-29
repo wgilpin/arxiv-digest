@@ -557,4 +557,48 @@ export class CourseService {
       relations: ['modules', 'modules.lessons', 'modules.lessons.progress'],
     });
   }
+
+  async deleteCourse(id: number): Promise<void> {
+    console.log(`Attempting to delete course with ID: ${id}`);
+    
+    const course = await this.courseRepository.findOne({
+      where: { id },
+      relations: ['modules', 'modules.lessons', 'modules.lessons.progress'],
+    });
+
+    if (!course) {
+      console.log(`Course with ID ${id} not found`);
+      throw new Error(`Course with ID ${id} not found`);
+    }
+
+    console.log(`Found course: ${course.paperTitle}, deleting...`);
+
+    // Delete progress records first
+    for (const module of course.modules || []) {
+      for (const lesson of module.lessons || []) {
+        if (lesson.progress && lesson.progress.length > 0) {
+          await this.progressRepository.remove(lesson.progress);
+          console.log(`Deleted ${lesson.progress.length} progress records for lesson ${lesson.id}`);
+        }
+      }
+    }
+
+    // Delete lessons
+    for (const module of course.modules || []) {
+      if (module.lessons && module.lessons.length > 0) {
+        await this.lessonRepository.remove(module.lessons);
+        console.log(`Deleted ${module.lessons.length} lessons for module ${module.id}`);
+      }
+    }
+
+    // Delete modules
+    if (course.modules && course.modules.length > 0) {
+      await this.moduleRepository.remove(course.modules);
+      console.log(`Deleted ${course.modules.length} modules for course ${id}`);
+    }
+
+    // Finally delete the course
+    await this.courseRepository.remove(course);
+    console.log(`Successfully deleted course ${id}: ${course.paperTitle}`);
+  }
 }

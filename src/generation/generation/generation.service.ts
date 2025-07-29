@@ -80,8 +80,7 @@ ${paperText.slice(0, 30000)} // Limit to avoid token limits
       if (arrayMatch) {
         const arrayContent = arrayMatch[1];
         extractedConcepts = arrayContent
-          .split(/[,
-]/)
+          .split(/[,\n]/)
           .map((item) => item.replace(/["\s]/g, '').trim())
           .filter((item) => item.length > 2 && item.length < 50)
           .slice(0, 12);
