@@ -20,11 +20,11 @@ export class CourseGateway
   @WebSocketServer() server: Server;
   private logger: Logger = new Logger('CourseGateway');
 
-  afterInit(server: Server) {
+  afterInit(_: Server) {
     this.logger.log('Course WebSocket Gateway initialized');
   }
 
-  handleConnection(client: Socket, ...args: any[]) {
+  handleConnection(client: Socket, ..._: any[]) {
     this.logger.log(`Client connected: ${client.id}`);
   }
 

@@ -84,6 +84,25 @@
       // Clean up if form submission completes quickly
       setTimeout(() => clearInterval(messageInterval), 120000); // Stop after 2 minutes
     });
+
+    function confirmDelete(courseId) {
+      if (confirm('Are you sure you want to delete this course? This action cannot be undone.')) {
+        fetch(`/courses/${courseId}`, {
+          method: 'DELETE',
+        })
+        .then(response => {
+          if (response.ok) {
+            window.location.reload();
+          } else {
+            alert('Error deleting course.');
+          }
+        })
+        .catch(error => {
+          console.error('Error:', error);
+          alert('Error deleting course.');
+        });
+      }
+    }
   </script>
 </body>
 </html>]]>

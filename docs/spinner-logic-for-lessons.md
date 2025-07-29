@@ -23,7 +23,9 @@ Located in: `src/course/course/course.controller.ts`
 
 1. Module has lesson titles (lesson titles exist)
 2. The globally next lesson to be generated is in this module
-3. At least one lesson has content (indicating active generation is happening)
+3. The lesson to be generated is actually being generated right now (checked via `isLessonBeingGenerated()`)
+
+###
 
 ## Generation Tracking
 

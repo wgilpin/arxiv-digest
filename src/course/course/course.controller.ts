@@ -1,4 +1,3 @@
-/* eslint-disable prettier/prettier */
 /* eslint-disable no-useless-escape */
 import { Controller, Get, Post, Param, Res } from '@nestjs/common';
 import { Response } from 'express';
@@ -43,7 +42,7 @@ export class CourseController {
     let result = html;
 
     for (const pattern of mathPatterns) {
-      result = result.replace(pattern, (match, openTag, content, closeTag) => {
+      result = result.replace(pattern, (match, openTag, content, _) => {
         // Only convert if it looks like mathematical notation
         if (this.isMathematicalContent(content)) {
           return `$${content}$`;
@@ -98,7 +97,7 @@ export class CourseController {
     }
 
     // Start lesson content generation before rendering page (so spinner shows)
-    const generationPromise = this.courseService
+    this.courseService
       .prepareNextLesson(id)
       .then(() => {
         // Generate remaining lesson titles for modules that don't have them yet
@@ -130,12 +129,15 @@ export class CourseController {
               }) || [];
             
             const nextLessonToGenerate = allLessons.find(l => !l.content);
-            const hasAnyContent = allLessons.some(l => l.content !== null);
-            
+
+            // A lesson in this module is being generated if the next lesson to generate is in this module
+            // and the generation service confirms it's being generated.
+            const isGenerating = nextLessonToGenerate && this.courseService.isLessonBeingGenerated(nextLessonToGenerate.id);
+
             // Show module spinner only if the next lesson to generate is in this module AND generation is active
             showModuleSpinner = !!(nextLessonToGenerate && 
                                    nextLessonToGenerate.moduleOrderIndex === module.orderIndex && 
-                                   hasAnyContent);
+                                   isGenerating);
           }
 
           return `
@@ -152,7 +154,7 @@ export class CourseController {
             <ul class="space-y-1">
               ${module.lessons
                 .sort((a, b) => a.orderIndex - b.orderIndex)
-                .map((lesson: Lesson, index: number) => {
+                .map((lesson: Lesson, _: number) => {
                   const isCompleted =
                     lesson.progress && lesson.progress.length > 0;
                   const hasContent = lesson.content !== null;
@@ -307,12 +309,15 @@ export class CourseController {
               }) || [];
             
             const nextLessonToGenerate = allLessons.find(l => !l.content);
-            const hasAnyContent = allLessons.some(l => l.content !== null);
-            
+
+            // A lesson in this module is being generated if the next lesson to generate is in this module
+            // and the generation service confirms it's being generated.
+            const isGenerating = nextLessonToGenerate && this.courseService.isLessonBeingGenerated(nextLessonToGenerate.id);
+
             // Show module spinner only if the next lesson to generate is in this module AND generation is active
             showModuleSpinner = !!(nextLessonToGenerate && 
                                    nextLessonToGenerate.moduleOrderIndex === module.orderIndex && 
-                                   hasAnyContent);
+                                   isGenerating);
           }
 
           return `
@@ -329,7 +334,7 @@ export class CourseController {
             <ul class="space-y-1">
               ${module.lessons
                 .sort((a, b) => a.orderIndex - b.orderIndex)
-                .map((lesson: Lesson, index: number) => {
+                .map((lesson: Lesson, _: number) => {
                   const isCompleted =
                     lesson.progress && lesson.progress.length > 0;
                   const hasContent = lesson.content !== null;

@@ -60,8 +60,8 @@ ${paperText.slice(0, 30000)} // Limit to avoid token limits
 
         // Normalize quotes to handle smart quotes from AI models
         jsonString = jsonString
-          .replace(/[""]/g, '"') // Convert smart quotes to straight quotes
-          .replace(/['']/g, "'"); // Convert smart single quotes too
+          .replace(/[“”]/g, '"') // Convert smart quotes to straight quotes
+          .replace(/[‘’]/g, "'"); // Convert smart single quotes too
 
         const concepts = JSON.parse(jsonString) as unknown[];
         if (Array.isArray(concepts) && concepts.length > 0) {
@@ -76,11 +76,12 @@ ${paperText.slice(0, 30000)} // Limit to avoid token limits
       let extractedConcepts: string[] = [];
 
       // Try to find array-like content in the response
-      const arrayMatch = response.match(/\[([\s\S]*?)\]/);
+      const arrayMatch = response.match(/\b\[([\s\S]*?)\]\b/);
       if (arrayMatch) {
         const arrayContent = arrayMatch[1];
         extractedConcepts = arrayContent
-          .split(/[,\n]/)
+          .split(/[,
+]/)
           .map((item) => item.replace(/["\s]/g, '').trim())
           .filter((item) => item.length > 2 && item.length < 50)
           .slice(0, 12);
@@ -154,83 +155,138 @@ Concept: ${concept}
       const result = await model.generateContent(prompt);
       const response = result.response.text();
 
-      // Try to parse JSON response (handle markdown code blocks)
       try {
-        let jsonString = response.trim();
-        const jsonMatch = jsonString.match(
-          /```(?:json)?\s*(\[[\s\S]*?\])\s*```/,
-        );
+        // Attempt to extract JSON array from the response
+        const jsonMatch = response.match(/(\[[\s\S]*?\])/);
         if (jsonMatch) {
-          jsonString = jsonMatch[1];
-        } else if (jsonString.startsWith('```') && jsonString.endsWith('```')) {
-          jsonString = jsonString
-            .slice(3, -3)
-            .replace(/^json\s*/, '')
-            .trim();
+          const jsonString = jsonMatch[0];
+          try {
+            const topics = JSON.parse(jsonString) as unknown[];
+            if (Array.isArray(topics) && topics.length > 0) {
+              return (topics as string[]).slice(0, 5);
+            }
+          } catch (e) {
+            console.error('Initial JSON.parse failed. Raw response:', response);
+            // If parsing fails, try to manually clean and parse
+            const cleanedString = jsonString
+              .replace(/\n/g, '')
+              .replace(/,\s*\]/g, ']')
+              .replace(/,\s*}/g, '}');
+            try {
+              const topics = JSON.parse(cleanedString) as unknown[];
+              if (Array.isArray(topics) && topics.length > 0) {
+                return (topics as string[]).slice(0, 5);
+              }
+            } catch (e2) {
+              console.error('Cleaned JSON.parse also failed. Falling back to text extraction.');
+            }
+          }
         }
 
-        // Normalize quotes to handle smart quotes from AI models
-        jsonString = jsonString
-          .replace(/[""]/g, '"') // Convert smart quotes to straight quotes
-          .replace(/['']/g, "'") // Convert smart single quotes too
-          .replace(/[\u2018\u2019]/g, "'") // Additional smart quote variants
-          .replace(/[\u201C\u201D]/g, '"') // Additional smart quote variants
-          .trim();
+        // Fallback to extracting content from lines if JSON parsing fails
+        const lines = response
+          .split('\n')
+          .map((line) => line.trim())
+          .filter(
+            (line) =>
+              line.length > 0 &&
+              !line.startsWith('```') &&
+              !line.toLowerCase().includes('json'),
+          );
 
-        // Additional JSON cleaning
-        jsonString = jsonString
-          .replace(/,\s*([}\]])/g, '$1') // Remove trailing commas
-          .replace(/([{\[,])\s*,/g, '$1') // Remove leading commas
-          .replace(/,+/g, ','); // Replace multiple commas with single
+        const topics = lines
+          .map((line) =>
+            line
+              .replace(/^["\d\-*•\[\],]+/, '')              
+              .replace(/["\],]+$/, '')              
+              .trim(),
+          )
+          .filter((topic) => topic.length > 5 && topic.length < 100);
 
-        console.log('Raw AI response:', response);
-        console.log('Cleaned JSON string:', jsonString);
-        console.log('JSON string length:', jsonString.length);
-        console.log('First 50 chars:', jsonString.substring(0, 50));
-        
-        const topics = JSON.parse(jsonString) as unknown[];
-        if (Array.isArray(topics) && topics.length > 0) {
-          return (topics as string[]).slice(0, 5); // Limit to 5 lessons max per module
+        if (topics.length > 0) {
+          return topics.slice(0, 5);
         }
       } catch (parseError) {
         console.error('Failed to parse lesson topics JSON:', parseError);
         console.error('Raw response was:', response);
-        
-        // Try to extract topics from raw text as fallback
-        const lines = response.split('\n').filter(line => line.trim().length > 0);
-        const extractedTopics = [];
-        
-        for (const line of lines) {
-          // Look for lines that might be lesson titles
-          const cleaned = line.replace(/^[-*•"\[\]0-9.\s]+/, '').replace(/["\[\],]+$/, '').trim();
-          if (cleaned.length > 5 && cleaned.length < 100 && !cleaned.includes('TITLE:') && !cleaned.includes('CONTENT:')) {
-            extractedTopics.push(cleaned);
-          }
-        }
-        
-        if (extractedTopics.length > 0) {
-          console.log('Extracted topics from raw text:', extractedTopics);
-          return extractedTopics.slice(0, 5);
-        }
       }
 
-      // Fallback: provide generic breakdown
+      // Ultimate fallback
       return [
         `Introduction to ${concept}`,
         `Core Principles of ${concept}`,
         `Applications of ${concept}`,
-        `Advanced Aspects of ${concept}`,
       ];
     } catch (error) {
       console.error(`Error generating lesson topics for ${concept}:`, error);
-
-      // Fallback topics
       return [
         `Introduction to ${concept}`,
         `Understanding ${concept}`,
         `Practical Applications`,
       ];
     }
+  }
+
+  private generateFocusedLessonPrompt(concept: string, topic: string): string {
+    return `
+Create a focused educational lesson about the topic: "${topic}" (part of the broader concept: "${concept}")
+
+The lesson should be suitable for someone learning this topic for the first time, but assume they have a basic technical background.
+
+IMPORTANT: This lesson should be focused, concise, and readable in 2-3 minutes. Focus ONLY on the specific topic provided, not the entire concept.
+
+Please structure your response as follows:
+TITLE: [A clear, engaging title for the lesson]
+
+CONTENT:
+[Write the lesson content in well-formatted Markdown. For this focused lesson, include:]
+- Clear definition/explanation of this specific topic
+- Why this topic matters within the broader concept
+- Key points or principles for this topic
+- Brief practical example or application
+- How this topic connects to the overall concept
+
+Use proper Markdown formatting:
+- **Bold** for important terms and section headers
+- *Italics* for emphasis
+- \`code\` for technical terms, variables, and mathematical notation
+- Bullet points for lists
+- Code blocks for examples
+- ## for section headers
+
+Make the content engaging, informative, and approximately 200-350 words (2-3 minute read).
+`;
+  }
+
+  private generateComprehensiveLessonPrompt(concept: string): string {
+    return `
+Create a comprehensive educational lesson about the concept: "${concept}"
+
+The lesson should be suitable for someone learning this concept for the first first time, but assume they have a basic technical background.
+
+Please structure your response as follows:
+TITLE: [A clear, engaging title for the lesson]
+
+CONTENT:
+[Write the lesson content in well-formatted Markdown. Include:]
+- Clear definition and explanation of the concept
+- Why this concept is important
+- Key principles or components
+- Real-world applications or examples
+- How it relates to other concepts in the field
+- Common misconceptions or challenges
+- Further learning resources
+
+Use proper Markdown formatting:
+- **Bold** for important terms and section headers
+- *Italics* for emphasis
+- \`code\` for technical terms, variables, and mathematical notation
+- Bullet points for lists
+- Code blocks for examples
+- ## for section headers
+
+Make the content engaging, informative, and approximately 400-600 words.
+`;
   }
 
   /**
@@ -248,51 +304,9 @@ Concept: ${concept}
         model: 'gemini-2.5-flash',
       });
 
-      const lessonFocus = topic || concept;
-      const isTopicSpecific = !!topic;
-
-      const prompt = `
-Create a ${isTopicSpecific ? 'focused' : 'comprehensive'} educational lesson about ${isTopicSpecific ? `the topic: "${topic}" (part of the broader concept: "${concept}")` : `the concept: "${concept}"`}
-
-The lesson should be suitable for someone learning this ${isTopicSpecific ? 'topic' : 'concept'} for the first time, but assume they have a basic technical background.
-
-${isTopicSpecific ? 'IMPORTANT: This lesson should be focused, concise, and readable in 2-3 minutes. Focus ONLY on the specific topic provided, not the entire concept.' : ''}
-
-Please structure your response as follows:
-TITLE: [A clear, engaging title for the lesson]
-
-CONTENT:
-[Write the lesson content in well-formatted Markdown. ${isTopicSpecific ? 'For this focused lesson, include:' : 'Include:'}]
-${
-  isTopicSpecific
-    ? `
-- Clear definition/explanation of this specific topic
-- Why this topic matters within the broader concept
-- Key points or principles for this topic
-- Brief practical example or application
-- How this topic connects to the overall concept
-`
-    : `
-- Clear definition and explanation of the concept
-- Why this concept is important  
-- Key principles or components
-- Real-world applications or examples
-- How it relates to other concepts in the field
-- Common misconceptions or challenges
-- Further learning resources
-`
-}
-
-Use proper Markdown formatting:
-- **Bold** for important terms and section headers
-- *Italics* for emphasis
-- \`code\` for technical terms, variables, and mathematical notation
-- Bullet points for lists
-- Code blocks for examples
-- ## for section headers
-
-Make the content engaging, informative, and approximately ${isTopicSpecific ? '200-350 words (2-3 minute read)' : '400-600 words'}.
-`;
+      const prompt = topic
+        ? this.generateFocusedLessonPrompt(concept, topic)
+        : this.generateComprehensiveLessonPrompt(concept);
 
       const result = await model.generateContent(prompt);
       const response = result.response.text();

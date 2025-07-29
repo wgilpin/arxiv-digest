@@ -6,6 +6,7 @@ import {
   Res,
   Param,
   NotFoundException,
+  Delete,
 } from '@nestjs/common';
 import { Response } from 'express';
 import { ArxivService } from '../arxiv/arxiv.service';
@@ -40,10 +41,17 @@ export class PaperController {
         <div class="card bg-base-200 shadow-sm mb-4">
           <div class="card-body">
             <h3 class="card-title text-lg">${course.paperTitle}</h3>
-            <p class="text-sm text-gray-600 mb-2">ArXiv ID: ${course.paperArxivId}</p>
+            <p class="text-sm text-gray-600 mb-2">ArXiv ID: ${
+              course.paperArxivId
+            }</p>
             <p class="text-sm text-gray-600 mb-4">Created: ${course.createdAt.toLocaleDateString()}</p>
             <div class="card-actions justify-end">
-              <a href="/courses/${course.id}" class="btn btn-primary btn-sm">View Course</a>
+              <a href="/courses/${
+                course.id
+              }" class="btn btn-primary btn-sm">View Course</a>
+              <button class="btn btn-error btn-sm" onclick="confirmDelete(${
+                course.id
+              })">Delete</button>
             </div>
           </div>
         </div>
@@ -63,6 +71,20 @@ export class PaperController {
       coursesHtml: coursesHtml,
     });
     res.send(html);
+  }
+
+  @Delete('/courses/:id')
+  async deleteCourse(@Param('id') id: number, @Res() res: Response) {
+    try {
+      const course = await this.courseRepository.findOneBy({ id });
+      if (!course) {
+        throw new NotFoundException('Course not found');
+      }
+      await this.courseRepository.remove(course);
+      res.status(200).send({ message: 'Course deleted successfully' });
+    } catch (error) {
+      res.status(500).send({ message: 'Error deleting course' });
+    }
   }
 
   @Post('/')

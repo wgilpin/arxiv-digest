@@ -25,6 +25,6 @@ export class Lesson {
   @ManyToOne(() => Module, (module) => module.lessons)
   module: Module;
 
-  @OneToMany(() => Progress, (progress) => progress.lesson)
+  @OneToMany(() => Progress, (progress) => progress.lesson, { cascade: true })
   progress: Progress[];
 }

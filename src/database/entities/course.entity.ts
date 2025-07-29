@@ -30,6 +30,6 @@ export class Course {
   @CreateDateColumn()
   createdAt: Date;
 
-  @OneToMany(() => Module, (module) => module.course)
+  @OneToMany(() => Module, (module) => module.course, { cascade: true })
   modules: Module[];
 }
