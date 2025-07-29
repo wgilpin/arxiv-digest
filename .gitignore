@@ -57,3 +57,4 @@ report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 database.sqlite
 package-lock.json
 cache/
+.claude/settings.local.json
