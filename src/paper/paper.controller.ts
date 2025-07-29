@@ -79,14 +79,27 @@ export class PaperController {
     try {
       const paperTitle = await this.arxivService.fetchPaperTitle(arxivId);
       const paperText = await this.arxivService.getPaperText(arxivId);
-      const extractedConcepts =
-        await this.generationService.extractConcepts(paperText);
+      const conceptsWithImportance = 
+        await this.generationService.extractConceptsWithImportance(paperText);
+
+      // Extract concept names for backward compatibility
+      const extractedConcepts = conceptsWithImportance.map(item => item.concept);
+      
+      // Create importance mapping
+      const conceptImportance: Record<string, { importance: 'central' | 'supporting' | 'peripheral'; reasoning: string }> = {};
+      conceptsWithImportance.forEach(item => {
+        conceptImportance[item.concept] = {
+          importance: item.importance,
+          reasoning: item.reasoning
+        };
+      });
 
       const newCourse = this.courseRepository.create({
         paperArxivId: arxivId,
         paperTitle: paperTitle,
         comprehensionLevel: 'beginner', // Default for now
         extractedConcepts: extractedConcepts,
+        conceptImportance: conceptImportance,
         paperContent: paperText,
       });
 

@@ -21,6 +21,9 @@ export class Course {
   @Column({ type: 'json', nullable: true })
   extractedConcepts: string[];
 
+  @Column({ type: 'json', nullable: true })
+  conceptImportance: Record<string, { importance: 'central' | 'supporting' | 'peripheral'; reasoning: string }>;
+
   @Column()
   comprehensionLevel: string;
 

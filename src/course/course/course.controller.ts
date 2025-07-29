@@ -89,6 +89,57 @@ export class CourseController {
     );
   }
 
+  /**
+   * Gets importance information for a module concept
+   */
+  private getConceptImportance(course: Course, conceptName: string): { importance: 'central' | 'supporting' | 'peripheral'; reasoning: string } | null {
+    if (!course.conceptImportance) {
+      return null;
+    }
+    return course.conceptImportance[conceptName] || null;
+  }
+
+  /**
+   * Creates an importance badge for display
+   */
+  private createImportanceBadge(importance: 'central' | 'supporting' | 'peripheral'): string {
+    const badgeClasses = {
+      central: 'badge-error',
+      supporting: 'badge-warning', 
+      peripheral: 'badge-info'
+    };
+    
+    const labels = {
+      central: 'Central',
+      supporting: 'Supporting',
+      peripheral: 'Peripheral'
+    };
+
+    return `<span class="badge ${badgeClasses[importance]} badge-sm ml-2">${labels[importance]}</span>`;
+  }
+
+  /**
+   * Sorts modules by importance (central first, then supporting, then peripheral)
+   */
+  private sortModulesByImportance(modules: Module[], course: Course): Module[] {
+    const importanceOrder = { central: 0, supporting: 1, peripheral: 2 };
+    
+    return modules.sort((a, b) => {
+      const aImportance = this.getConceptImportance(course, a.title);
+      const bImportance = this.getConceptImportance(course, b.title);
+      
+      const aOrder = aImportance ? importanceOrder[aImportance.importance] : 1; // default to supporting
+      const bOrder = bImportance ? importanceOrder[bImportance.importance] : 1;
+      
+      // If same importance, sort by original order index
+      if (aOrder === bOrder) {
+        return a.orderIndex - b.orderIndex;
+      }
+      
+      return aOrder - bOrder;
+    });
+  }
+
   @Get('/:id')
   async getCoursePage(@Param('id') id: number, @Res() res: Response) {
     const course: Course | null =
@@ -113,9 +164,10 @@ export class CourseController {
 
     let modulesHtml = '';
     if (course.modules && course.modules.length > 0) {
-      modulesHtml = course.modules
-        .sort((a, b) => a.orderIndex - b.orderIndex)
+      modulesHtml = this.sortModulesByImportance(course.modules, course)
         .map((module: Module) => {
+          const importanceInfo = this.getConceptImportance(course, module.title);
+          const importanceBadge = importanceInfo ? this.createImportanceBadge(importanceInfo.importance) : '';
           const hasLessons = module.lessons && module.lessons.length > 0;
           
           // Check if this module is actively generating lesson content
@@ -147,6 +199,7 @@ export class CourseController {
           <input type="checkbox" /> 
           <div class="collapse-title text-xl font-medium">
             ${module.title}
+            ${importanceBadge}
             ${showModuleSpinner ? '<span class="loading loading-spinner loading-sm ml-2"></span>' : ''}
           </div>
           <div class="collapse-content"> 
@@ -293,9 +346,10 @@ export class CourseController {
 
     let modulesHtml = '';
     if (course.modules && course.modules.length > 0) {
-      modulesHtml = course.modules
-        .sort((a, b) => a.orderIndex - b.orderIndex)
+      modulesHtml = this.sortModulesByImportance(course.modules, course)
         .map((module: Module) => {
+          const importanceInfo = this.getConceptImportance(course, module.title);
+          const importanceBadge = importanceInfo ? this.createImportanceBadge(importanceInfo.importance) : '';
           const hasLessons = module.lessons && module.lessons.length > 0;
           
           // Check if this module is actively generating lesson content
@@ -327,6 +381,7 @@ export class CourseController {
           <input type="checkbox" /> 
           <div class="collapse-title text-xl font-medium">
             ${module.title}
+            ${importanceBadge}
             ${showModuleSpinner ? '<span class="loading loading-spinner loading-sm ml-2"></span>' : ''}
           </div>
           <div class="collapse-content"> 

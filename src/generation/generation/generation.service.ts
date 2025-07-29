@@ -15,6 +15,12 @@ interface ConceptWithSearchTerms {
   searchTerms: string[];
 }
 
+interface ConceptWithImportance {
+  concept: string;
+  importance: 'central' | 'supporting' | 'peripheral';
+  reasoning: string;
+}
+
 interface WikipediaCache {
   [key: string]: {
     data: WikipediaSearchResult;
@@ -382,6 +388,16 @@ Respond with only "RELEVANT" or "NOT_RELEVANT" followed by a brief reason.
   }
 
   /**
+   * Extracts key concepts from the provided paper text using Gemini-2.5-flash.
+   * @param paperText The text of the paper.
+   * @returns A promise that resolves to an array of extracted concepts.
+   */
+  async extractConcepts(paperText: string): Promise<string[]> {
+    const conceptsWithImportance = await this.extractConceptsWithImportance(paperText);
+    return conceptsWithImportance.map(item => item.concept);
+  }
+
+  /**
    * Generates alternative search terms for a concept to improve Wikipedia search success.
    */
   private async generateSearchTerms(concept: string): Promise<string[]> {
@@ -524,6 +540,208 @@ Concept: ${concept}
     } catch (error) {
       console.error(`Error searching Wikipedia for topic: ${query}`, error);
       return null;
+    }
+  }
+
+  /**
+   * Generates a single comprehensive summary lesson for peripheral concepts.
+   */
+  async generateSummaryLesson(
+    concept: string,
+    knowledgeLevel?: string,
+    paperContent?: string,
+  ): Promise<{ title: string; content: string }> {
+    // Always use the broader concept for Wikipedia search
+    const searchQuery = concept;
+    console.log(`Generating summary lesson for peripheral concept: "${concept}"`);
+
+    try {
+      // Step 1: Try Wikipedia first
+      console.log('Attempting Wikipedia content generation for summary lesson...');
+      const wikipediaResult = await this.searchWikipedia(searchQuery, concept);
+      
+      if (wikipediaResult) {
+        console.log(`Using Wikipedia article for summary: "${wikipediaResult.title}"`);
+        const lesson = await this.summarizeWikipediaForSummary(
+          wikipediaResult.content,
+          concept,
+          wikipediaResult.title,
+          wikipediaResult.url,
+          paperContent
+        );
+        console.log(`Successfully generated summary lesson from Wikipedia for: ${concept}`);
+        return lesson;
+      }
+
+      console.log('Wikipedia content not suitable for summary, falling back to LLM generation...');
+
+    } catch (error) {
+      console.error('Error with Wikipedia content generation for summary:', error);
+      console.log('Falling back to LLM generation for summary due to Wikipedia error...');
+    }
+
+    // Step 2: Fallback to LLM-based summary generation
+    console.log('Using LLM-based summary generation as fallback...');
+    try {
+      const fallbackLesson = await this.generateLLMSummaryLesson(concept, knowledgeLevel, paperContent);
+      console.log(`Successfully generated summary lesson using LLM fallback for: ${concept}`);
+      return fallbackLesson;
+    } catch (error) {
+      console.error('Error with LLM fallback summary generation:', error);
+      
+      // Ultimate fallback
+      return {
+        title: `Overview of ${concept}`,
+        content: `This lesson provides a brief overview of ${concept} as it relates to understanding the research paper. ${concept} is mentioned in the paper but is not central to the main contribution.`,
+      };
+    }
+  }
+
+  /**
+   * Summarizes Wikipedia content into a single comprehensive lesson for peripheral concepts.
+   */
+  private async summarizeWikipediaForSummary(
+    articleContent: string,
+    concept: string,
+    wikipediaTitle: string,
+    wikipediaUrl: string,
+    paperContent?: string
+  ): Promise<{ title: string; content: string }> {
+    try {
+      const model = this.genAI.getGenerativeModel({
+        model: 'gemini-2.5-flash',
+      });
+
+      const paperContextSection = paperContent ? `
+
+CRITICAL CONTEXT - Paper-Specific Focus:
+This is a SUMMARY lesson for a peripheral concept. The goal is to provide just enough understanding of "${concept}" to comprehend its role in this research paper. Focus on the essential aspects that help the reader understand why this concept is mentioned in the paper.
+
+Here are key excerpts from the original paper for context:
+${paperContent.slice(0, 3000)}
+
+IMPORTANT: Keep this concise - this is not a central concept to the paper.` : '';
+
+      const prompt = `
+Create a concise summary lesson about "${concept}" using the following Wikipedia article content.
+
+This is a PERIPHERAL concept - provide just enough information for basic understanding in the context of academic research.${paperContextSection}
+
+Please structure your response as follows:
+TITLE: [A clear, concise title]
+
+CONTENT:
+[Write a brief lesson in well-formatted Markdown, approximately 150-250 words covering:]
+- **Definition**: Clear, concise explanation of what ${concept} is
+- **Context**: Why this concept appears in academic research
+- **Key Point**: The most important thing to understand about this concept${paperContent ? '\n- **Paper Connection**: Brief note on how this relates to the research' : ''}
+
+Use proper Markdown formatting but keep it concise since this is a peripheral concept.
+
+IMPORTANT: End with: "**Source:** [${wikipediaTitle}](${wikipediaUrl}) (Wikipedia)"
+
+Wikipedia Article Content:
+${articleContent.slice(0, 5000)}
+`;
+
+      const result = await model.generateContent(prompt);
+      const response = result.response.text();
+
+      // Parse the structured response
+      const titleMatch = response.match(/TITLE:\s*(.+)/i);
+      const contentMatch = response.match(/CONTENT:\s*([\s\S]+)/i);
+
+      const title = titleMatch ? titleMatch[1].trim() : `Overview of ${concept}`;
+      let content = contentMatch ? contentMatch[1].trim() : response;
+
+      // Ensure source attribution is present
+      if (!content.includes('**Source:**')) {
+        content += `\n\n**Source:** [${wikipediaTitle}](${wikipediaUrl}) (Wikipedia)`;
+      }
+
+      const processedContent = this.escapeLatexInMath(content);
+
+      return {
+        title,
+        content: processedContent || `Brief overview of ${concept} as it relates to the research paper.`,
+      };
+    } catch (error) {
+      console.error(`Error summarizing Wikipedia content for summary of ${concept}:`, error);
+
+      return {
+        title: `Overview of ${concept}`,
+        content: `Brief overview of ${concept} as it relates to understanding the research paper.\n\n**Source:** [${wikipediaTitle}](${wikipediaUrl}) (Wikipedia)`,
+      };
+    }
+  }
+
+  /**
+   * Generates a summary lesson using LLM without Wikipedia content.
+   */
+  private async generateLLMSummaryLesson(
+    concept: string,
+    knowledgeLevel?: string,
+    paperContent?: string
+  ): Promise<{ title: string; content: string }> {
+    try {
+      const model = this.genAI.getGenerativeModel({
+        model: 'gemini-2.5-flash',
+      });
+
+      const paperContextSection = paperContent ? `
+
+CRITICAL CONTEXT - Paper-Specific Focus:
+This is a SUMMARY lesson for a peripheral concept. The goal is to provide just enough understanding of "${concept}" to comprehend its role in this research paper.
+
+Here are key excerpts from the original paper for context:
+${paperContent.slice(0, 3000)}
+
+IMPORTANT: Keep this concise - this is not a central concept to the paper.` : '';
+
+      const knowledgeLevelContext = knowledgeLevel ? `
+
+The user has self-assessed their knowledge of "${concept}" as: "${knowledgeLevel}". Provide an appropriate level of detail for someone at this knowledge level.` : '';
+
+      const prompt = `
+Create a concise summary lesson about the concept: "${concept}"
+
+This is a PERIPHERAL concept - provide just enough information for basic understanding in an academic research context.${knowledgeLevelContext}${paperContextSection}
+
+Please structure your response as follows:
+TITLE: [A clear, concise title]
+
+CONTENT:
+[Write a brief lesson in well-formatted Markdown, approximately 150-250 words covering:]
+- **Definition**: Clear, concise explanation of what ${concept} is
+- **Context**: Why this concept appears in academic research
+- **Key Point**: The most important thing to understand about this concept${paperContent ? '\n- **Paper Connection**: Brief note on how this relates to the research' : ''}
+
+Use proper Markdown formatting but keep it concise since this is a peripheral concept.
+`;
+
+      const result = await model.generateContent(prompt);
+      const response = result.response.text();
+
+      // Parse the structured response
+      const titleMatch = response.match(/TITLE:\s*(.+)/i);
+      const contentMatch = response.match(/CONTENT:\s*([\s\S]+)/i);
+
+      const title = titleMatch ? titleMatch[1].trim() : `Overview of ${concept}`;
+      const content = contentMatch ? contentMatch[1].trim() : response;
+
+      const processedContent = this.escapeLatexInMath(content);
+
+      return {
+        title,
+        content: processedContent || `Brief overview of ${concept} as it relates to understanding the research paper.`,
+      };
+    } catch (error) {
+      console.error(`Error generating LLM summary lesson for ${concept}:`, error);
+
+      return {
+        title: `Overview of ${concept}`,
+        content: `Brief overview of ${concept} as it relates to understanding the research paper.`,
+      };
     }
   }
 
@@ -688,11 +906,11 @@ ${articleContent.slice(0, 8000)} // Use more content for better context
   }
 
   /**
-   * Extracts key concepts from the provided paper text using Gemini-2.5-flash.
+   * Extracts key concepts with importance rankings from the provided paper text.
    * @param paperText The text of the paper.
-   * @returns A promise that resolves to an array of extracted concepts.
+   * @returns A promise that resolves to an array of concepts with importance levels.
    */
-  async extractConcepts(paperText: string): Promise<string[]> {
+  async extractConceptsWithImportance(paperText: string): Promise<ConceptWithImportance[]> {
     try {
       const model = this.genAI.getGenerativeModel({
         model: 'gemini-2.5-flash',
@@ -704,6 +922,11 @@ ${articleContent.slice(0, 8000)} // Use more content for better context
       const prompt = `
 Analyze this academic paper and extract 8-12 key technical concepts that would be essential for understanding this paper. 
 
+For each concept, determine its importance level for understanding this specific paper:
+- **central**: Core to the paper's main contribution, methodology, or results. Reader must understand this deeply.
+- **supporting**: Important for understanding key sections or context. Reader needs good familiarity.
+- **peripheral**: Mentioned or used but not central to understanding the main ideas. Basic awareness sufficient.
+
 Focus on:
 - Core algorithms, techniques, or methodologies
 - Mathematical concepts or models
@@ -711,10 +934,24 @@ Focus on:
 - Fundamental theories or principles
 - Important data structures or architectures
 
-IMPORTANT: Return ONLY a valid JSON array of strings. Do not include any markdown formatting, explanations, or code blocks. Just the raw JSON array.
-
-Example format:
-["Neural Networks", "Backpropagation", "Gradient Descent"]
+IMPORTANT: Return ONLY a valid JSON array of objects with this exact format:
+[
+  {
+    "concept": "Neural Networks",
+    "importance": "central",
+    "reasoning": "Core methodology used throughout the paper's experiments"
+  },
+  {
+    "concept": "Backpropagation",
+    "importance": "supporting", 
+    "reasoning": "Training method mentioned but not the main focus"
+  },
+  {
+    "concept": "Gradient Descent",
+    "importance": "peripheral",
+    "reasoning": "Brief mention in optimization context"
+  }
+]
 
 Paper text:
 ${paperText.slice(0, 30000)} // Limit to avoid token limits
@@ -745,16 +982,16 @@ ${paperText.slice(0, 30000)} // Limit to avoid token limits
           .replace(/[""]/g, '"') // Convert smart quotes to straight quotes
           .replace(/['']/g, "'"); // Convert smart single quotes too
 
-        const concepts = JSON.parse(jsonString) as unknown[];
-        if (Array.isArray(concepts) && concepts.length > 0) {
-          return (concepts as string[]).slice(0, 12); // Limit to 12 concepts max
+        const conceptsWithImportance = JSON.parse(jsonString) as unknown[];
+        if (Array.isArray(conceptsWithImportance) && conceptsWithImportance.length > 0) {
+          return (conceptsWithImportance as ConceptWithImportance[]).slice(0, 12); // Limit to 12 concepts max
         }
       } catch (parseError) {
         console.error('Failed to parse concepts JSON:', parseError);
         console.error('Raw response:', response);
       }
 
-      // Fallback: extract concepts from response text
+      // Fallback: extract concept names from response text and assign default importance
       let extractedConcepts: string[] = [];
 
       // Try to find array-like content in the response
@@ -784,9 +1021,16 @@ ${paperText.slice(0, 30000)} // Limit to avoid token limits
           .slice(0, 12);
       }
 
-      return extractedConcepts.length > 0
+      // Convert to ConceptWithImportance format with default importance
+      const fallbackConcepts = extractedConcepts.length > 0
         ? extractedConcepts
         : ['Machine Learning', 'Neural Networks', 'Deep Learning']; // Ultimate fallback
+
+      return fallbackConcepts.map(concept => ({
+        concept,
+        importance: 'central' as const, // Default to central when we can't determine importance
+        reasoning: 'Extracted from paper text (importance not determined)'
+      }));
     } catch (error) {
       console.error('Error extracting concepts:', error);
 
@@ -798,7 +1042,11 @@ ${paperText.slice(0, 30000)} // Limit to avoid token limits
         'Optimization',
         'Statistical Methods',
         'Data Analysis',
-      ];
+      ].map(concept => ({
+        concept,
+        importance: 'central' as const,
+        reasoning: 'Default fallback concept'
+      }));
     }
   }
 
