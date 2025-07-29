@@ -170,6 +170,12 @@ export class CourseController {
           const importanceBadge = importanceInfo ? this.createImportanceBadge(importanceInfo.importance) : '';
           const hasLessons = module.lessons && module.lessons.length > 0;
           
+          // Check if all lessons in this module are completed
+          const allLessonsCompleted = hasLessons && module.lessons.every(lesson => 
+            lesson.progress && lesson.progress.length > 0
+          );
+          const moduleCompletedIcon = allLessonsCompleted ? '<span class="text-green-500 mr-2">✓</span>' : '';
+          
           // Check if this module is actively generating lesson content
           let showModuleSpinner = false;
           if (hasLessons) {
@@ -198,7 +204,7 @@ export class CourseController {
         <div class="collapse collapse-plus bg-base-200 mb-2">
           <input type="checkbox" /> 
           <div class="collapse-title text-xl font-medium">
-            ${module.title}
+            ${moduleCompletedIcon}${module.title}
             ${importanceBadge}
             ${showModuleSpinner ? '<span class="loading loading-spinner loading-sm ml-2"></span>' : ''}
           </div>
@@ -352,6 +358,12 @@ export class CourseController {
           const importanceBadge = importanceInfo ? this.createImportanceBadge(importanceInfo.importance) : '';
           const hasLessons = module.lessons && module.lessons.length > 0;
           
+          // Check if all lessons in this module are completed
+          const allLessonsCompleted = hasLessons && module.lessons.every(lesson => 
+            lesson.progress && lesson.progress.length > 0
+          );
+          const moduleCompletedIcon = allLessonsCompleted ? '<span class="text-green-500 mr-2">✓</span>' : '';
+          
           // Check if this module is actively generating lesson content
           let showModuleSpinner = false;
           if (hasLessons) {
@@ -380,7 +392,7 @@ export class CourseController {
         <div class="collapse collapse-plus bg-base-200 mb-2" data-module-id="${module.id}">
           <input type="checkbox" /> 
           <div class="collapse-title text-xl font-medium">
-            ${module.title}
+            ${moduleCompletedIcon}${module.title}
             ${importanceBadge}
             ${showModuleSpinner ? '<span class="loading loading-spinner loading-sm ml-2"></span>' : ''}
           </div>
