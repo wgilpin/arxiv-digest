@@ -487,6 +487,43 @@ export class CourseController {
     }
   }
 
+  @Get('/:courseId/generation-status')
+  async getGenerationStatus(
+    @Param('courseId') courseId: number,
+    @Res() res: Response,
+  ) {
+    try {
+      const course = await this.courseService.findCourseByIdWithProgress(courseId);
+      
+      if (!course) {
+        return res.status(404).json({ error: 'Course not found' });
+      }
+
+      // Get all lessons and check which ones are being generated
+      const generatingLessons: number[] = [];
+      
+      if (course.modules) {
+        for (const module of course.modules) {
+          if (module.lessons) {
+            for (const lesson of module.lessons) {
+              if (this.courseService.isLessonBeingGenerated(lesson.id)) {
+                generatingLessons.push(lesson.id);
+              }
+            }
+          }
+        }
+      }
+
+      res.json({
+        courseId,
+        generatingLessons,
+      });
+    } catch (error) {
+      console.error('Error getting generation status:', error);
+      res.status(500).json({ error: 'Failed to get generation status' });
+    }
+  }
+
   @Delete('/:id')
   async deleteCourse(@Param('id') id: number, @Res() res: Response) {
     console.log(`DELETE request received for course ID: ${id}`);

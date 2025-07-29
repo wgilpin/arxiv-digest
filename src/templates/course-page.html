@@ -147,6 +147,85 @@
         socket.disconnect();
       }
     });
+
+    // Handle back/forward cache restoration
+    window.addEventListener('pageshow', (event) => {
+      if (event.persisted) {
+        console.log('Page restored from bfcache - checking generation status');
+        checkAndUpdateGenerationStatus();
+      }
+    });
+
+    // Check current generation status and update spinners accordingly
+    async function checkAndUpdateGenerationStatus() {
+      if (!courseId) return;
+      
+      try {
+        const response = await fetch(`/courses/${courseId}/generation-status`);
+        if (!response.ok) {
+          console.error('Failed to fetch generation status:', response.status);
+          return;
+        }
+        
+        const data = await response.json();
+        const generatingLessons = data.generatingLessons || [];
+        
+        console.log('Current generating lessons:', generatingLessons);
+        
+        // Update lesson spinners
+        document.querySelectorAll('.loading.loading-spinner.loading-xs').forEach(spinner => {
+          const lessonButton = spinner.closest('.btn');
+          if (lessonButton) {
+            const lessonLink = lessonButton.getAttribute('href');
+            if (lessonLink) {
+              // Extract lesson ID from href like "/courses/lessons/36"
+              const lessonIdMatch = lessonLink.match(/\/courses\/lessons\/(\d+)/);
+              if (lessonIdMatch) {
+                const lessonId = parseInt(lessonIdMatch[1]);
+                if (generatingLessons.includes(lessonId)) {
+                  // Lesson is generating, show spinner
+                  spinner.style.display = '';
+                } else {
+                  // Lesson is not generating, hide spinner
+                  spinner.style.display = 'none';
+                }
+              }
+            }
+          }
+        });
+        
+        // Update module spinners - need to check if any lesson in module is generating
+        document.querySelectorAll('.collapse').forEach(moduleElement => {
+          const moduleSpinner = moduleElement.querySelector('.loading.loading-spinner.loading-sm');
+          if (moduleSpinner) {
+            let moduleHasGeneratingLesson = false;
+            
+            // Check all lessons in this module
+            const lessonLinks = moduleElement.querySelectorAll('a[href*="/courses/lessons/"]');
+            lessonLinks.forEach(link => {
+              const lessonIdMatch = link.getAttribute('href').match(/\/courses\/lessons\/(\d+)/);
+              if (lessonIdMatch) {
+                const lessonId = parseInt(lessonIdMatch[1]);
+                if (generatingLessons.includes(lessonId)) {
+                  moduleHasGeneratingLesson = true;
+                }
+              }
+            });
+            
+            if (moduleHasGeneratingLesson) {
+              moduleSpinner.style.display = '';
+            } else {
+              moduleSpinner.style.display = 'none';
+            }
+          }
+        });
+        
+        console.log('Spinner states updated after bfcache restoration');
+        
+      } catch (error) {
+        console.error('Error checking generation status:', error);
+      }
+    }
   </script>
 </body>
 </html>]]>
