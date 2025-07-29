@@ -10,6 +10,11 @@ interface WikipediaSearchResult {
   relevanceScore?: number;
 }
 
+interface ConceptWithSearchTerms {
+  concept: string;
+  searchTerms: string[];
+}
+
 interface WikipediaCache {
   [key: string]: {
     data: WikipediaSearchResult;
@@ -367,12 +372,78 @@ Respond with only "RELEVANT" or "NOT_RELEVANT" followed by a brief reason.
       if (!isRelevant) {
         console.log(`LLM validation failed for topic: ${topic}. Response: ${response}`);
       }
-
+      console.log(`LLM validation succeeded for topic: ${topic}`);
       return isRelevant;
     } catch (error) {
       console.error(`Error validating Wikipedia content for topic: ${topic}`, error);
       // If validation fails, be conservative and assume not relevant
       return false;
+    }
+  }
+
+  /**
+   * Generates alternative search terms for a concept to improve Wikipedia search success.
+   */
+  private async generateSearchTerms(concept: string): Promise<string[]> {
+    try {
+      const model = this.genAI.getGenerativeModel({
+        model: 'gemini-2.5-flash',
+        generationConfig: {
+          responseMimeType: 'application/json',
+        },
+      });
+
+      const prompt = `
+Generate 3-4 alternative search terms for finding the Wikipedia article about: "${concept}"
+
+Focus on:
+- The most common/standard name for this concept
+- Alternative names or spellings
+- Broader category it belongs to
+- More specific technical terms
+
+IMPORTANT: Return ONLY a valid JSON array of strings, ordered from most likely to find a good Wikipedia article to least likely.
+
+Example for "Martingale Property Violation":
+["Martingale", "Martingale Theory", "Stochastic Process", "Mathematical Finance"]
+
+Example for "In-Context Learning":
+["In-Context Learning", "Few-Shot Learning", "Prompt Engineering", "Large Language Model"]
+
+Concept: ${concept}
+`;
+
+      const result = await model.generateContent(prompt);
+      const response = result.response.text();
+
+      try {
+        // Clean and parse JSON response
+        let jsonString = response.trim();
+        const jsonMatch = jsonString.match(/(\[[\s\S]*?\])/);
+        if (jsonMatch) {
+          jsonString = jsonMatch[0];
+        }
+
+        const searchTerms = JSON.parse(jsonString) as unknown[];
+        if (Array.isArray(searchTerms) && searchTerms.length > 0) {
+          return (searchTerms as string[]).slice(0, 4);
+        }
+      } catch (parseError) {
+        console.error('Failed to parse search terms JSON:', parseError);
+      }
+
+      // Fallback: return the original concept and a cleaned version
+      const cleanedConcept = concept
+        .replace(/\s+(Property|Violation|Method|Algorithm|Technique)$/i, '')
+        .trim();
+      
+      return [concept, cleanedConcept].filter((term, index, arr) => 
+        term.length > 0 && arr.indexOf(term) === index
+      );
+
+    } catch (error) {
+      console.error(`Error generating search terms for ${concept}:`, error);
+      return [concept];
     }
   }
 
@@ -392,50 +463,63 @@ Respond with only "RELEVANT" or "NOT_RELEVANT" followed by a brief reason.
     try {
       console.log(`Searching Wikipedia for topic: ${query}`);
       
-      // Search for articles
-      const searchResults = await this.searchWikipediaArticles(query);
-      if (searchResults.length === 0) {
-        console.log(`No Wikipedia results found for topic: ${query}`);
-        return null;
+      // Generate alternative search terms
+      const searchTerms = await this.generateSearchTerms(query);
+      console.log(`Generated search terms: ${searchTerms.join(', ')}`);
+      
+      // Try each search term until we find a good result
+      for (const searchTerm of searchTerms) {
+        console.log(`Trying search term: "${searchTerm}"`);
+        
+        // Search for articles with this term
+        const searchResults = await this.searchWikipediaArticles(searchTerm);
+        if (searchResults.length === 0) {
+          console.log(`No Wikipedia results found for search term: ${searchTerm}`);
+          continue; // Try next search term
+        }
+
+        // Rank and select best result for this search term
+        const bestResult = this.rankAndSelectBestResult(searchResults, searchTerm, concept);
+        if (!bestResult) {
+          console.log(`No suitable Wikipedia result found for search term: ${searchTerm}`);
+          continue; // Try next search term
+        }
+
+        console.log(`Selected Wikipedia article: "${bestResult.title}" (score: ${bestResult.relevanceScore.toFixed(2)}) for search term: "${searchTerm}"`);
+
+        // Get full article content
+        const articleContent = await this.getWikipediaArticleContent(bestResult.title);
+        if (!articleContent) {
+          console.log(`Failed to fetch Wikipedia content for: ${bestResult.title}`);
+          continue; // Try next search term
+        }
+
+        // Validate content quality
+        const isValid = await this.validateWikipediaContent(articleContent.content, query, concept);
+        if (!isValid) {
+          console.log(`Wikipedia content validation failed for: ${bestResult.title}, trying next search term`);
+          continue; // Try next search term
+        }
+
+        // Success! Create result object
+        const result: WikipediaSearchResult = {
+          title: articleContent.title,
+          content: articleContent.content,
+          url: articleContent.url,
+          timestamp: Date.now(),
+          relevanceScore: bestResult.relevanceScore,
+        };
+
+        // Cache the result
+        this.setCachedWikipediaContent(cacheKey, result);
+
+        console.log(`Successfully processed Wikipedia article for topic: ${query} using search term: "${searchTerm}"`);
+        return result;
       }
-
-      // Rank and select best result
-      const bestResult = this.rankAndSelectBestResult(searchResults, query, concept);
-      if (!bestResult) {
-        console.log(`No suitable Wikipedia result found for topic: ${query}`);
-        return null;
-      }
-
-      console.log(`Selected Wikipedia article: "${bestResult.title}" (score: ${bestResult.relevanceScore.toFixed(2)})`);
-
-      // Get full article content
-      const articleContent = await this.getWikipediaArticleContent(bestResult.title);
-      if (!articleContent) {
-        console.log(`Failed to fetch Wikipedia content for: ${bestResult.title}`);
-        return null;
-      }
-
-      // Validate content quality
-      const isValid = await this.validateWikipediaContent(articleContent.content, query, concept);
-      if (!isValid) {
-        console.log(`Wikipedia content validation failed for: ${bestResult.title}`);
-        return null;
-      }
-
-      // Create result object
-      const result: WikipediaSearchResult = {
-        title: articleContent.title,
-        content: articleContent.content,
-        url: articleContent.url,
-        timestamp: Date.now(),
-        relevanceScore: bestResult.relevanceScore,
-      };
-
-      // Cache the result
-      this.setCachedWikipediaContent(cacheKey, result);
-
-      console.log(`Successfully processed Wikipedia article for topic: ${query}`);
-      return result;
+      
+      // If we get here, none of the search terms worked
+      console.log(`All search terms failed for topic: ${query}`);
+      return null;
 
     } catch (error) {
       console.error(`Error searching Wikipedia for topic: ${query}`, error);
@@ -658,8 +742,8 @@ ${paperText.slice(0, 30000)} // Limit to avoid token limits
 
         // Normalize quotes to handle smart quotes from AI models
         jsonString = jsonString
-          .replace(/[“”]/g, '"') // Convert smart quotes to straight quotes
-          .replace(/[‘’]/g, "'"); // Convert smart single quotes too
+          .replace(/[""]/g, '"') // Convert smart quotes to straight quotes
+          .replace(/['']/g, "'"); // Convert smart single quotes too
 
         const concepts = JSON.parse(jsonString) as unknown[];
         if (Array.isArray(concepts) && concepts.length > 0) {
