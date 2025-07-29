@@ -355,8 +355,8 @@ export class CourseService {
 
       console.log(`Found ${previousLessons.length} previous lessons in module for context`);
 
-      // Generate content for this lesson with context
-      const lessonContent = await this.generationService.generateLessonContent(
+      // Generate content for this lesson with context (using Wikipedia-enabled method)
+      const lessonContent = await this.generationService.generateLessonFromExternalSources(
         moduleConcept,
         nextLesson.title,
         previousLessons,
@@ -469,8 +469,8 @@ export class CourseService {
 
       console.log(`Found ${previousLessons.length} previous lessons in module for context`);
 
-      // Generate content for this lesson with context
-      const lessonContent = await this.generationService.generateLessonContent(
+      // Generate content for this lesson with context (using Wikipedia-enabled method)
+      const lessonContent = await this.generationService.generateLessonFromExternalSources(
         moduleConcept,
         lesson.title,
         previousLessons,
