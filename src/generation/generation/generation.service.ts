@@ -17,6 +17,9 @@ export class GenerationService {
     try {
       const model = this.genAI.getGenerativeModel({
         model: 'gemini-2.5-flash',
+        generationConfig: {
+          responseMimeType: 'application/json',
+        },
       });
 
       const prompt = `
@@ -129,6 +132,9 @@ ${paperText.slice(0, 30000)} // Limit to avoid token limits
     try {
       const model = this.genAI.getGenerativeModel({
         model: 'gemini-2.5-flash',
+        generationConfig: {
+          responseMimeType: 'application/json',
+        },
       });
 
       const prompt = `
@@ -165,20 +171,82 @@ Concept: ${concept}
               return (topics as string[]).slice(0, 5);
             }
           } catch (e) {
-            console.error('Initial JSON.parse failed. Raw response:', response);
-            // If parsing fails, try to manually clean and parse
-            const cleanedString = jsonString
-              .replace(/\n/g, '')
-              .replace(/,\s*\]/g, ']')
-              .replace(/,\s*}/g, '}');
-            try {
-              const topics = JSON.parse(cleanedString) as unknown[];
-              if (Array.isArray(topics) && topics.length > 0) {
-                return (topics as string[]).slice(0, 5);
+            console.error('Initial JSON.parse failed:', e.message);
+            console.error('Raw jsonString:', jsonString);
+            
+            // Try multiple cleanup strategies for escaped quotes and malformed JSON
+            const cleanupStrategies = [
+              // Strategy 1: Handle escaped quotes within strings
+              (str: string) => str.replace(/\\"/g, '"'),
+              
+              // Strategy 2: Fix double-escaped quotes
+              (str: string) => str.replace(/\\\\"/g, '\\"'),
+              
+              // Strategy 3: Handle unescaped quotes within strings by escaping them
+              (str: string) => {
+                // This handles cases like: "Understanding the "Fair Game" Core of Martingales"
+                // We need to escape the inner quotes
+                let result = str;
+                
+                // Find array elements and fix quotes within each element
+                result = result.replace(/"([^"]*?"[^"]*?"[^"]*)"/g, (match, content) => {
+                  // If content contains unescaped quotes, escape them
+                  const escapedContent = content.replace(/"/g, '\\"');
+                  return `"${escapedContent}"`;
+                });
+                
+                // Also handle simpler cases with just one pair of inner quotes
+                result = result.replace(/"([^"]*)"([^"]*)"([^"]*)"/g, '"$1\\"$2\\"$3"');
+                
+                return result;
+              },
+              
+              // Strategy 4: Handle truncated JSON arrays
+              (str: string) => {
+                let result = str.trim();
+                
+                // If the string doesn't end with ], try to fix it
+                if (!result.endsWith(']')) {
+                  // If it ends with a quote, add the closing bracket
+                  if (result.endsWith('"')) {
+                    result += ']';
+                  }
+                  // If it doesn't end with a quote, add quote and bracket
+                  else if (!result.endsWith('"]')) {
+                    result += '"]';
+                  }
+                }
+                
+                return result;
+              },
+              
+              // Strategy 5: Basic cleanup
+              (str: string) => str
+                .replace(/\n/g, '')
+                .replace(/,\s*\]/g, ']')
+                .replace(/,\s*}/g, '}')
+            ];
+
+            for (let i = 0; i < cleanupStrategies.length; i++) {
+              try {
+                let cleanedString = jsonString;
+                // Apply all strategies up to current one
+                for (let j = 0; j <= i; j++) {
+                  cleanedString = cleanupStrategies[j](cleanedString);
+                }
+                
+                console.log(`Trying cleanup strategy ${i + 1}:`, cleanedString);
+                const topics = JSON.parse(cleanedString) as unknown[];
+                if (Array.isArray(topics) && topics.length > 0) {
+                  console.log('Successfully parsed with strategy', i + 1);
+                  return (topics as string[]).slice(0, 5);
+                }
+              } catch (e2) {
+                console.log(`Cleanup strategy ${i + 1} failed:`, e2.message);
               }
-            } catch (e2) {
-              console.error('Cleaned JSON.parse also failed. Falling back to text extraction.');
             }
+            
+            console.error('All cleanup strategies failed. Falling back to text extraction.');
           }
         }
 
