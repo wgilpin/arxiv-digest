@@ -297,7 +297,8 @@ Concept: ${concept}
   private generateFocusedLessonPrompt(
     concept: string, 
     topic: string,
-    previousLessons?: Array<{ title: string; content: string }>
+    previousLessons?: Array<{ title: string; content: string }>,
+    knowledgeLevel?: string
   ): string {
     const previousLessonsContext = previousLessons && previousLessons.length > 0 
       ? `
@@ -310,10 +311,17 @@ ${lesson.content}
 CRITICAL: Do NOT repeat information that has already been covered in the previous lessons above. Build upon what has been taught, but avoid duplicating explanations, examples, or concepts that have already been thoroughly covered.` 
       : '';
 
+    const knowledgeLevelContext = knowledgeLevel 
+      ? `
+
+IMPORTANT: The user has self-assessed their knowledge level for "${concept}" as: "${knowledgeLevel}". 
+Tailor the lesson complexity, examples, and explanations to be appropriate for someone at this knowledge level. ${knowledgeLevel === 'No knowledge of the concept' ? 'Start with fundamentals and avoid assumptions about prior knowledge.' : knowledgeLevel === 'Basic understanding of the concept' ? 'Build on basic concepts but explain technical details thoroughly.' : 'Focus on technical depth while avoiding redundant basic explanations.'}`
+      : '';
+
     return `
 Create a focused educational lesson about the topic: "${topic}" (part of the broader concept: "${concept}")
 
-The lesson should be suitable for someone learning this topic for the first time, but assume they have a basic technical background.${previousLessonsContext}
+The lesson should be suitable for someone learning this topic for the first time, but assume they have a basic technical background.${previousLessonsContext}${knowledgeLevelContext}
 
 IMPORTANT: This lesson should be focused, concise, and readable in 2-3 minutes. Focus ONLY on the specific topic provided, not the entire concept.
 
@@ -342,7 +350,8 @@ Make the content engaging, informative, and approximately 200-350 words (2-3 min
 
   private generateComprehensiveLessonPrompt(
     concept: string,
-    previousLessons?: Array<{ title: string; content: string }>
+    previousLessons?: Array<{ title: string; content: string }>,
+    knowledgeLevel?: string
   ): string {
     const previousLessonsContext = previousLessons && previousLessons.length > 0 
       ? `
@@ -355,10 +364,17 @@ ${lesson.content}
 CRITICAL: Do NOT repeat information that has already been covered in the previous lessons above. Build upon what has been taught, but avoid duplicating explanations, examples, or concepts that have already been thoroughly covered.` 
       : '';
 
+    const knowledgeLevelContext = knowledgeLevel 
+      ? `
+
+IMPORTANT: The user has self-assessed their knowledge level for "${concept}" as: "${knowledgeLevel}". 
+Tailor the lesson complexity, examples, and explanations to be appropriate for someone at this knowledge level. ${knowledgeLevel === 'No knowledge of the concept' ? 'Start with fundamentals and avoid assumptions about prior knowledge.' : knowledgeLevel === 'Basic understanding of the concept' ? 'Build on basic concepts but explain technical details thoroughly.' : 'Focus on technical depth while avoiding redundant basic explanations.'}`
+      : '';
+
     return `
 Create a comprehensive educational lesson about the concept: "${concept}"
 
-The lesson should be suitable for someone learning this concept for the first first time, but assume they have a basic technical background.${previousLessonsContext}
+The lesson should be suitable for someone learning this concept for the first first time, but assume they have a basic technical background.${previousLessonsContext}${knowledgeLevelContext}
 
 Please structure your response as follows:
 TITLE: [A clear, engaging title for the lesson]
@@ -390,12 +406,14 @@ Make the content engaging, informative, and approximately 400-600 words.
    * @param concept The main concept this lesson belongs to.
    * @param topic The specific topic for this lesson.
    * @param previousLessons Previous lessons in the same module for context.
+   * @param knowledgeLevel User's self-assessed knowledge level for this concept.
    * @returns A promise that resolves to an object containing the lesson title and content.
    */
   async generateLessonContent(
     concept: string,
     topic?: string,
     previousLessons?: Array<{ title: string; content: string }>,
+    knowledgeLevel?: string,
   ): Promise<{ title: string; content: string }> {
     try {
       const model = this.genAI.getGenerativeModel({
@@ -403,8 +421,8 @@ Make the content engaging, informative, and approximately 400-600 words.
       });
 
       const prompt = topic
-        ? this.generateFocusedLessonPrompt(concept, topic, previousLessons)
-        : this.generateComprehensiveLessonPrompt(concept, previousLessons);
+        ? this.generateFocusedLessonPrompt(concept, topic, previousLessons, knowledgeLevel)
+        : this.generateComprehensiveLessonPrompt(concept, previousLessons, knowledgeLevel);
 
       const result = await model.generateContent(prompt);
       const response = result.response.text();

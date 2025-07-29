@@ -27,6 +27,9 @@ export class Course {
   @Column({ nullable: true })
   plannedConcepts: string;
 
+  @Column({ type: 'json', nullable: true })
+  knowledgeLevels: Record<string, number>;
+
   @CreateDateColumn()
   createdAt: Date;
 

@@ -68,7 +68,11 @@ Academic papers often assume significant domain knowledge, creating barriers for
 2. **Concept Extraction**:
     - The system analyzes the paper to identify key technical concepts.
 3. **Knowledge Assessment**:
-    - The user is presented with a list of concepts and self-rates their familiarity on a 1-5 scale.
+    - The user is presented with a list of concepts and self-rates their familiarity with the concept:
+      - 0: No knowledge of the concept.
+      - 1: Basic understanding of the concept.
+      - 2: Fair understanding of the concept without technical details.
+      - 3: Detailed technical understanding of the concept.
 4. **Gap Analysis**:
     - The system identifies knowledge gaps based on the user's self-assessment.
 5. **Course Generation**:

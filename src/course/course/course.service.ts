@@ -34,6 +34,22 @@ export class CourseService {
     return this.currentGeneratingLessons.get(lessonId) === true;
   }
 
+  /**
+   * Convert knowledge level number to descriptive text
+   */
+  private getKnowledgeLevelText(level: number): string {
+    switch (level) {
+      case 0:
+        return 'No knowledge of the concept';
+      case 1:
+        return 'Basic understanding of the concept';
+      case 2:
+        return 'Fair understanding of the concept without technical details';
+      default:
+        return 'No knowledge of the concept'; // fallback
+    }
+  }
+
   async generateSyllabus(
     courseId: number,
     ratings: Record<string, number>,
@@ -46,11 +62,13 @@ export class CourseService {
     }
 
     const knowledgeGaps = Object.entries(ratings)
-      .filter(([, rating]) => rating <= 3)
+      .filter(([, rating]) => rating < 3)  // Changed from <= 3 to < 3 (exclude rating 3)
       .map(([concept]) => concept);
 
     // Store all concepts for future generation
     course.plannedConcepts = knowledgeGaps.join(',');
+    // Store the knowledge level ratings
+    course.knowledgeLevels = ratings;
     await this.courseRepository.save(course);
 
     // Create all module placeholders first (fast)
@@ -308,6 +326,10 @@ export class CourseService {
         return;
       }
 
+      // Get the user's knowledge level for this concept
+      const knowledgeLevel = course.knowledgeLevels?.[moduleConcept] ?? 0;
+      const knowledgeLevelText = this.getKnowledgeLevelText(knowledgeLevel);
+
       console.log(
         `Preparing lesson: ${nextLesson.title} (course ${courseId}, module ${moduleOrderIndex}, lesson ${nextLesson.orderIndex})`,
       );
@@ -324,7 +346,7 @@ export class CourseService {
 
       // Get previous lessons in this module for context
       const previousLessons = (module.lessons || [])
-        .filter(lesson => lesson.orderIndex < nextLesson.orderIndex && lesson.content)
+        .filter((lesson): lesson is typeof lesson & { content: string } => lesson.orderIndex < nextLesson.orderIndex && lesson.content !== null)
         .sort((a, b) => a.orderIndex - b.orderIndex)
         .map(lesson => ({
           title: lesson.title,
@@ -338,6 +360,7 @@ export class CourseService {
         moduleConcept,
         nextLesson.title,
         previousLessons,
+        knowledgeLevelText,
       );
 
       // Update the lesson with content
@@ -412,6 +435,10 @@ export class CourseService {
         return;
       }
 
+      // Get the user's knowledge level for this concept
+      const knowledgeLevel = course.knowledgeLevels?.[moduleConcept] ?? 0;
+      const knowledgeLevelText = this.getKnowledgeLevelText(knowledgeLevel);
+
       console.log(
         `Generating specific lesson: ${lesson.title} (lesson ${lessonId}, module ${moduleOrderIndex})`,
       );
@@ -433,7 +460,7 @@ export class CourseService {
       });
 
       const previousLessons = (module?.lessons || [])
-        .filter(l => l.orderIndex < lesson.orderIndex && l.content)
+        .filter((l): l is typeof l & { content: string } => l.orderIndex < lesson.orderIndex && l.content !== null)
         .sort((a, b) => a.orderIndex - b.orderIndex)
         .map(l => ({
           title: l.title,
@@ -447,6 +474,7 @@ export class CourseService {
         moduleConcept,
         lesson.title,
         previousLessons,
+        knowledgeLevelText,
       );
 
       // Update the lesson with content

@@ -139,6 +139,8 @@
     // Start WebSocket connection after page loads
     window.addEventListener('load', () => {
       initializeWebSocket();
+      // Also immediately check and update content to ensure fresh state
+      updateModulesContent();
     });
 
     // Clean up WebSocket connection when page unloads
@@ -151,7 +153,10 @@
     // Handle back/forward cache restoration
     window.addEventListener('pageshow', (event) => {
       if (event.persisted) {
-        console.log('Page restored from bfcache - checking generation status');
+        console.log('Page restored from bfcache - refreshing content');
+        // First update the full content to get the latest lesson states
+        updateModulesContent();
+        // Then check generation status for spinners
         checkAndUpdateGenerationStatus();
       }
     });

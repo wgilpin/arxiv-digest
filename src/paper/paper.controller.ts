@@ -123,11 +123,10 @@ export class PaperController {
             <span class="label-text">${concept}:</span>
           </label>
           <select name="rating-${concept}" class="select select-bordered w-full">
-            <option value="1">1</option>
-            <option value="2">2</option>
-            <option value="3">3</option>
-            <option value="4">4</option>
-            <option value="5">5</option>
+            <option value="0">0 - No knowledge of the concept</option>
+            <option value="1">1 - Basic understanding of the concept</option>
+            <option value="2">2 - Fair understanding of the concept without technical details</option>
+            <option value="3">3 - Detailed technical understanding of the concept</option>
           </select>
         </div>
       `,
