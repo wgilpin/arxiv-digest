@@ -30,6 +30,9 @@ export class Course {
   @Column({ type: 'json', nullable: true })
   knowledgeLevels: Record<string, number>;
 
+  @Column({ type: 'text', nullable: true })
+  paperContent: string;
+
   @CreateDateColumn()
   createdAt: Date;
 

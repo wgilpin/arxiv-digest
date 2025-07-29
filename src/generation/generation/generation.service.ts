@@ -451,17 +451,28 @@ Respond with only "RELEVANT" or "NOT_RELEVANT" followed by a brief reason.
     topic: string,
     concept: string,
     wikipediaTitle: string,
-    wikipediaUrl: string
+    wikipediaUrl: string,
+    paperContent?: string
   ): Promise<{ title: string; content: string }> {
     try {
       const model = this.genAI.getGenerativeModel({
         model: 'gemini-2.5-flash',
       });
 
+      const paperContextSection = paperContent ? `
+
+CRITICAL CONTEXT - Original Paper Focus:
+The goal of this lesson is NOT to teach "${concept}" comprehensively, but specifically to help the reader understand how "${concept}" is used and applied in this research paper. Focus on the aspects, applications, and nuances of "${concept}" that are most relevant to understanding the paper's methodology, contributions, and results.
+
+Here are key excerpts from the original paper for context (focus your lesson on these aspects):
+${paperContent.slice(0, 4000)}
+
+IMPORTANT: Tailor your explanation to bridge the gap between general knowledge of "${concept}" and its specific application in this research paper.` : '';
+
       const prompt = `
 Create a focused educational lesson about the topic: "${topic}" (part of the broader concept: "${concept}") using the following Wikipedia article content.
 
-The lesson should be suitable for someone learning this topic for the first time, but assume they have a basic technical background.
+${paperContent ? 'Your goal is to help the user understand this topic sufficiently to comprehend the research paper provided in the context below.' : 'The lesson should help the user understand this topic at an appropriate technical level.'}${paperContextSection}
 
 IMPORTANT: This lesson should be focused, concise, and readable in 2-3 minutes. Focus ONLY on the specific topic provided, not the entire concept.
 
@@ -471,10 +482,10 @@ TITLE: [A clear, engaging title for the lesson]
 CONTENT:
 [Write the lesson content in well-formatted Markdown. For this focused lesson, include:]
 - Clear definition/explanation of this specific topic
-- Why this topic matters within the broader concept
+- Why this topic matters within the broader concept${paperContent ? '\n- How this concept is specifically used in the research context provided' : ''}
 - Key points or principles for this topic
-- Brief practical example or application
-- How this topic connects to the overall concept
+- Brief practical example or application${paperContent ? ' (preferably related to the paper context)' : ''}
+- How this topic connects to the overall concept${paperContent ? ' and the research methodology' : ''}
 
 Use proper Markdown formatting:
 - **Bold** for important terms and section headers
@@ -536,6 +547,7 @@ ${articleContent.slice(0, 8000)} // Use more content for better context
     topic?: string,
     previousLessons?: Array<{ title: string; content: string }>,
     knowledgeLevel?: string,
+    paperContent?: string,
   ): Promise<{ title: string; content: string }> {
     // Always use the broader concept for Wikipedia search, not the specific lesson topic
     const searchQuery = concept;
@@ -554,7 +566,8 @@ ${articleContent.slice(0, 8000)} // Use more content for better context
           topic || concept, // Use the specific topic for lesson content, not the search query
           concept,
           wikipediaResult.title,
-          wikipediaResult.url
+          wikipediaResult.url,
+          paperContent
         );
         console.log(`Successfully generated lesson from Wikipedia for: ${searchQuery}`);
         return lesson;
@@ -574,7 +587,8 @@ ${articleContent.slice(0, 8000)} // Use more content for better context
         concept,
         topic,
         previousLessons,
-        knowledgeLevel
+        knowledgeLevel,
+        paperContent
       );
       console.log(`Successfully generated lesson using LLM fallback for: ${searchQuery}`);
       return fallbackLesson;
@@ -879,7 +893,8 @@ Concept: ${concept}
     concept: string, 
     topic: string,
     previousLessons?: Array<{ title: string; content: string }>,
-    knowledgeLevel?: string
+    knowledgeLevel?: string,
+    paperContent?: string
   ): string {
     const previousLessonsContext = previousLessons && previousLessons.length > 0 
       ? `
@@ -899,10 +914,20 @@ IMPORTANT: The user has self-assessed their knowledge level for "${concept}" as:
 Tailor the lesson complexity, examples, and explanations to be appropriate for someone at this knowledge level. ${knowledgeLevel === 'No knowledge of the concept' ? 'Start with fundamentals and avoid assumptions about prior knowledge.' : knowledgeLevel === 'Basic understanding of the concept' ? 'Build on basic concepts but explain technical details thoroughly.' : 'Focus on technical depth while avoiding redundant basic explanations.'}`
       : '';
 
+    const paperContextSection = paperContent ? `
+
+CRITICAL CONTEXT - Original Paper Focus:
+The goal of this lesson is NOT to teach "${topic}" comprehensively, but specifically to help the reader understand how "${topic}" relates to "${concept}" as used in this research paper. Focus on the aspects, applications, and nuances that are most relevant to understanding the paper's methodology, contributions, and results.
+
+Here are key excerpts from the original paper for context (focus your lesson on these aspects):
+${paperContent.slice(0, 4000)}
+
+IMPORTANT: Tailor your explanation to bridge the gap between general knowledge and its specific application in this research paper.` : '';
+
     return `
 Create a focused educational lesson about the topic: "${topic}" (part of the broader concept: "${concept}")
 
-The lesson should be suitable for someone learning this topic for the first time, but assume they have a basic technical background.${previousLessonsContext}${knowledgeLevelContext}
+${knowledgeLevel ? `The user has self-assessed their knowledge of "${concept}" as: "${knowledgeLevel}". Your goal is to bridge the gap between their current understanding and what's needed to comprehend the research paper.` : 'The lesson should help the user understand this topic sufficiently to comprehend the research paper.'}${previousLessonsContext}${paperContextSection}
 
 IMPORTANT: This lesson should be focused, concise, and readable in 2-3 minutes. Focus ONLY on the specific topic provided, not the entire concept.
 
@@ -912,10 +937,10 @@ TITLE: [A clear, engaging title for the lesson]
 CONTENT:
 [Write the lesson content in well-formatted Markdown. For this focused lesson, include:]
 - Clear definition/explanation of this specific topic
-- Why this topic matters within the broader concept
+- Why this topic matters within the broader concept${paperContent ? '\n- How this topic is specifically used in the research context provided' : ''}
 - Key points or principles for this topic
-- Brief practical example or application
-- How this topic connects to the overall concept
+- Brief practical example or application${paperContent ? ' (preferably related to the paper context)' : ''}
+- How this topic connects to the overall concept${paperContent ? ' and the research methodology' : ''}
 
 Use proper Markdown formatting:
 - **Bold** for important terms and section headers
@@ -932,7 +957,8 @@ Make the content engaging, informative, and approximately 200-350 words (2-3 min
   private generateComprehensiveLessonPrompt(
     concept: string,
     previousLessons?: Array<{ title: string; content: string }>,
-    knowledgeLevel?: string
+    knowledgeLevel?: string,
+    paperContent?: string
   ): string {
     const previousLessonsContext = previousLessons && previousLessons.length > 0 
       ? `
@@ -952,10 +978,20 @@ IMPORTANT: The user has self-assessed their knowledge level for "${concept}" as:
 Tailor the lesson complexity, examples, and explanations to be appropriate for someone at this knowledge level. ${knowledgeLevel === 'No knowledge of the concept' ? 'Start with fundamentals and avoid assumptions about prior knowledge.' : knowledgeLevel === 'Basic understanding of the concept' ? 'Build on basic concepts but explain technical details thoroughly.' : 'Focus on technical depth while avoiding redundant basic explanations.'}`
       : '';
 
+    const paperContextSection = paperContent ? `
+
+CRITICAL CONTEXT - Original Paper Focus:  
+The goal of this lesson is NOT to teach "${concept}" comprehensively, but specifically to help the reader understand how "${concept}" is used and applied in this research paper. Focus on the aspects, applications, and nuances of "${concept}" that are most relevant to understanding the paper's methodology, contributions, and results.
+
+Here are key excerpts from the original paper for context (focus your lesson on these aspects):
+${paperContent.slice(0, 4000)}
+
+IMPORTANT: Tailor your explanation to bridge the gap between general knowledge of "${concept}" and its specific application in this research paper.` : '';
+
     return `
 Create a comprehensive educational lesson about the concept: "${concept}"
 
-The lesson should be suitable for someone learning this concept for the first first time, but assume they have a basic technical background.${previousLessonsContext}${knowledgeLevelContext}
+${knowledgeLevel ? `The user has self-assessed their knowledge of "${concept}" as: "${knowledgeLevel}". Your goal is to bridge the gap between their current understanding and what's needed to comprehend the research paper.` : 'The lesson should help the user understand this concept sufficiently to comprehend the research paper.'}${previousLessonsContext}${paperContextSection}
 
 Please structure your response as follows:
 TITLE: [A clear, engaging title for the lesson]
@@ -963,10 +999,10 @@ TITLE: [A clear, engaging title for the lesson]
 CONTENT:
 [Write the lesson content in well-formatted Markdown. Include:]
 - Clear definition and explanation of the concept
-- Why this concept is important
+- Why this concept is important${paperContent ? '\n- How this concept is specifically used in the research context provided' : ''}
 - Key principles or components
-- Real-world applications or examples
-- How it relates to other concepts in the field
+- Real-world applications or examples${paperContent ? ' (preferably related to the paper context)' : ''}
+- How it relates to other concepts in the field${paperContent ? ' and the research methodology' : ''}
 - Common misconceptions or challenges
 - Further learning resources
 
@@ -995,6 +1031,7 @@ Make the content engaging, informative, and approximately 400-600 words.
     topic?: string,
     previousLessons?: Array<{ title: string; content: string }>,
     knowledgeLevel?: string,
+    paperContent?: string,
   ): Promise<{ title: string; content: string }> {
     try {
       const model = this.genAI.getGenerativeModel({
@@ -1002,8 +1039,8 @@ Make the content engaging, informative, and approximately 400-600 words.
       });
 
       const prompt = topic
-        ? this.generateFocusedLessonPrompt(concept, topic, previousLessons, knowledgeLevel)
-        : this.generateComprehensiveLessonPrompt(concept, previousLessons, knowledgeLevel);
+        ? this.generateFocusedLessonPrompt(concept, topic, previousLessons, knowledgeLevel, paperContent)
+        : this.generateComprehensiveLessonPrompt(concept, previousLessons, knowledgeLevel, paperContent);
 
       const result = await model.generateContent(prompt);
       const response = result.response.text();

@@ -87,6 +87,7 @@ export class PaperController {
         paperTitle: paperTitle,
         comprehensionLevel: 'beginner', // Default for now
         extractedConcepts: extractedConcepts,
+        paperContent: paperText,
       });
 
       await this.courseRepository.save(newCourse);

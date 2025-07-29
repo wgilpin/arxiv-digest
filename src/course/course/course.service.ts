@@ -361,6 +361,7 @@ export class CourseService {
         nextLesson.title,
         previousLessons,
         knowledgeLevelText,
+        course.paperContent,
       );
 
       // Update the lesson with content
@@ -475,6 +476,7 @@ export class CourseService {
         lesson.title,
         previousLessons,
         knowledgeLevelText,
+        course.paperContent,
       );
 
       // Update the lesson with content
