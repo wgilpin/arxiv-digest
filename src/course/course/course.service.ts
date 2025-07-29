@@ -322,10 +322,22 @@ export class CourseService {
         moduleOrderIndex,
       });
 
-      // Generate content for this lesson
+      // Get previous lessons in this module for context
+      const previousLessons = (module.lessons || [])
+        .filter(lesson => lesson.orderIndex < nextLesson.orderIndex && lesson.content)
+        .sort((a, b) => a.orderIndex - b.orderIndex)
+        .map(lesson => ({
+          title: lesson.title,
+          content: lesson.content,
+        }));
+
+      console.log(`Found ${previousLessons.length} previous lessons in module for context`);
+
+      // Generate content for this lesson with context
       const lessonContent = await this.generationService.generateLessonContent(
         moduleConcept,
         nextLesson.title,
+        previousLessons,
       );
 
       // Update the lesson with content
@@ -414,10 +426,27 @@ export class CourseService {
         moduleOrderIndex,
       });
 
-      // Generate content for this lesson
+      // Get previous lessons in this module for context
+      const module = await this.moduleRepository.findOne({
+        where: { id: lesson.module.id },
+        relations: ['lessons'],
+      });
+
+      const previousLessons = (module?.lessons || [])
+        .filter(l => l.orderIndex < lesson.orderIndex && l.content)
+        .sort((a, b) => a.orderIndex - b.orderIndex)
+        .map(l => ({
+          title: l.title,
+          content: l.content,
+        }));
+
+      console.log(`Found ${previousLessons.length} previous lessons in module for context`);
+
+      // Generate content for this lesson with context
       const lessonContent = await this.generationService.generateLessonContent(
         moduleConcept,
         lesson.title,
+        previousLessons,
       );
 
       // Update the lesson with content

@@ -294,11 +294,26 @@ Concept: ${concept}
     }
   }
 
-  private generateFocusedLessonPrompt(concept: string, topic: string): string {
+  private generateFocusedLessonPrompt(
+    concept: string, 
+    topic: string,
+    previousLessons?: Array<{ title: string; content: string }>
+  ): string {
+    const previousLessonsContext = previousLessons && previousLessons.length > 0 
+      ? `
+IMPORTANT CONTEXT - Previous lessons in this module:
+${previousLessons.map((lesson, index) => `
+${index + 1}. "${lesson.title}"
+${lesson.content}
+`).join('\n')}
+
+CRITICAL: Do NOT repeat information that has already been covered in the previous lessons above. Build upon what has been taught, but avoid duplicating explanations, examples, or concepts that have already been thoroughly covered.` 
+      : '';
+
     return `
 Create a focused educational lesson about the topic: "${topic}" (part of the broader concept: "${concept}")
 
-The lesson should be suitable for someone learning this topic for the first time, but assume they have a basic technical background.
+The lesson should be suitable for someone learning this topic for the first time, but assume they have a basic technical background.${previousLessonsContext}
 
 IMPORTANT: This lesson should be focused, concise, and readable in 2-3 minutes. Focus ONLY on the specific topic provided, not the entire concept.
 
@@ -325,11 +340,25 @@ Make the content engaging, informative, and approximately 200-350 words (2-3 min
 `;
   }
 
-  private generateComprehensiveLessonPrompt(concept: string): string {
+  private generateComprehensiveLessonPrompt(
+    concept: string,
+    previousLessons?: Array<{ title: string; content: string }>
+  ): string {
+    const previousLessonsContext = previousLessons && previousLessons.length > 0 
+      ? `
+IMPORTANT CONTEXT - Previous lessons in this module:
+${previousLessons.map((lesson, index) => `
+${index + 1}. "${lesson.title}"
+${lesson.content}
+`).join('\n')}
+
+CRITICAL: Do NOT repeat information that has already been covered in the previous lessons above. Build upon what has been taught, but avoid duplicating explanations, examples, or concepts that have already been thoroughly covered.` 
+      : '';
+
     return `
 Create a comprehensive educational lesson about the concept: "${concept}"
 
-The lesson should be suitable for someone learning this concept for the first first time, but assume they have a basic technical background.
+The lesson should be suitable for someone learning this concept for the first first time, but assume they have a basic technical background.${previousLessonsContext}
 
 Please structure your response as follows:
 TITLE: [A clear, engaging title for the lesson]
@@ -360,11 +389,13 @@ Make the content engaging, informative, and approximately 400-600 words.
    * Generates focused lesson content for a specific topic, designed for 2-3 minute reading.
    * @param concept The main concept this lesson belongs to.
    * @param topic The specific topic for this lesson.
+   * @param previousLessons Previous lessons in the same module for context.
    * @returns A promise that resolves to an object containing the lesson title and content.
    */
   async generateLessonContent(
     concept: string,
     topic?: string,
+    previousLessons?: Array<{ title: string; content: string }>,
   ): Promise<{ title: string; content: string }> {
     try {
       const model = this.genAI.getGenerativeModel({
@@ -372,8 +403,8 @@ Make the content engaging, informative, and approximately 400-600 words.
       });
 
       const prompt = topic
-        ? this.generateFocusedLessonPrompt(concept, topic)
-        : this.generateComprehensiveLessonPrompt(concept);
+        ? this.generateFocusedLessonPrompt(concept, topic, previousLessons)
+        : this.generateComprehensiveLessonPrompt(concept, previousLessons);
 
       const result = await model.generateContent(prompt);
       const response = result.response.text();
