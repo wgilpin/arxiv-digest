@@ -35,6 +35,16 @@ export class CourseService {
   }
 
   /**
+   * Gets the importance level for a concept from the course data
+   */
+  private getConceptImportance(course: Course, concept: string): 'central' | 'supporting' | 'peripheral' {
+    if (!course.conceptImportance || !course.conceptImportance[concept]) {
+      return 'central'; // Default to central if no importance data
+    }
+    return course.conceptImportance[concept].importance;
+  }
+
+  /**
    * Convert knowledge level number to descriptive text
    */
   private getKnowledgeLevelText(level: number): string {
@@ -94,38 +104,58 @@ export class CourseService {
       });
 
       if (firstModule) {
+        const firstConcept = knowledgeGaps[0];
+        const importance = this.getConceptImportance(course, firstConcept);
+        
         console.log(
-          `Generating lesson titles for module 0: ${knowledgeGaps[0]}`,
-        );
-        const lessonTopics = await this.generationService.generateLessonTopics(
-          knowledgeGaps[0],
+          `Generating lesson titles for module 0: ${firstConcept} (importance: ${importance})`,
         );
 
-        // Create lesson placeholders for first module only
-        for (
-          let lessonIndex = 0;
-          lessonIndex < lessonTopics.length;
-          lessonIndex++
-        ) {
-          const lessonTitle = lessonTopics[lessonIndex];
+        if (importance === 'peripheral') {
+          // For peripheral concepts, create only one summary lesson
           const lesson = this.lessonRepository.create({
-            title: lessonTitle,
+            title: `Overview of ${firstConcept}`,
             content: null, // No content yet
-            orderIndex: lessonIndex,
+            orderIndex: 0,
             module: firstModule,
           });
           await this.lessonRepository.save(lesson);
           console.log(
-            `Created lesson placeholder: ${lessonTitle} (module 0, lesson ${lessonIndex})`,
+            `Created single summary lesson for peripheral concept: ${firstConcept}`,
           );
+        } else {
+          // For central/supporting concepts, generate multiple lesson topics
+          const lessonTopics = await this.generationService.generateLessonTopics(
+            firstConcept,
+          );
+
+          // Create lesson placeholders for first module only
+          for (
+            let lessonIndex = 0;
+            lessonIndex < lessonTopics.length;
+            lessonIndex++
+          ) {
+            const lessonTitle = lessonTopics[lessonIndex];
+            const lesson = this.lessonRepository.create({
+              title: lessonTitle,
+              content: null, // No content yet
+              orderIndex: lessonIndex,
+              module: firstModule,
+            });
+            await this.lessonRepository.save(lesson);
+            console.log(
+              `Created lesson placeholder: ${lessonTitle} (module 0, lesson ${lessonIndex})`,
+            );
+          }
         }
 
         // Emit WebSocket event for lesson titles generated
+        const lessonCount = importance === 'peripheral' ? 1 : (await this.lessonRepository.count({ where: { module: { id: firstModule.id } } }));
         this.courseGateway.emitLessonTitlesGenerated(
           courseId,
           firstModule.id,
           firstModule.title,
-          lessonTopics.length,
+          lessonCount,
         );
 
         // Immediately start generating lesson 1 content
@@ -193,8 +223,10 @@ export class CourseService {
           continue;
         }
 
+        const importance = this.getConceptImportance(course, concept);
+        
         console.log(
-          `Generating lesson titles for module ${moduleIndex}: ${concept}`,
+          `Generating lesson titles for module ${moduleIndex}: ${concept} (importance: ${importance})`,
         );
 
         // Emit WebSocket event for title generation started
@@ -203,35 +235,59 @@ export class CourseService {
           moduleTitle: module.title,
           moduleOrderIndex: moduleIndex,
         });
-        const lessonTopics =
-          await this.generationService.generateLessonTopics(concept);
 
-        // Create lesson placeholders
-        for (
-          let lessonIndex = 0;
-          lessonIndex < lessonTopics.length;
-          lessonIndex++
-        ) {
-          const lessonTitle = lessonTopics[lessonIndex];
+        if (importance === 'peripheral') {
+          // For peripheral concepts, create only one summary lesson
           const lesson = this.lessonRepository.create({
-            title: lessonTitle,
+            title: `Overview of ${concept}`,
             content: null, // No content yet
-            orderIndex: lessonIndex,
+            orderIndex: 0,
             module: module,
           });
           await this.lessonRepository.save(lesson);
           console.log(
-            `Created lesson placeholder: ${lessonTitle} (module ${moduleIndex}, lesson ${lessonIndex})`,
+            `Created single summary lesson for peripheral concept: ${concept}`,
+          );
+
+          // Emit WebSocket event for lesson titles generated
+          this.courseGateway.emitLessonTitlesGenerated(
+            course.id,
+            module.id,
+            module.title,
+            1,
+          );
+        } else {
+          // For central/supporting concepts, generate multiple lesson topics
+          const lessonTopics =
+            await this.generationService.generateLessonTopics(concept);
+
+          // Create lesson placeholders
+          for (
+            let lessonIndex = 0;
+            lessonIndex < lessonTopics.length;
+            lessonIndex++
+          ) {
+            const lessonTitle = lessonTopics[lessonIndex];
+            const lesson = this.lessonRepository.create({
+              title: lessonTitle,
+              content: null, // No content yet
+              orderIndex: lessonIndex,
+              module: module,
+            });
+            await this.lessonRepository.save(lesson);
+            console.log(
+              `Created lesson placeholder: ${lessonTitle} (module ${moduleIndex}, lesson ${lessonIndex})`,
+            );
+          }
+
+          // Emit WebSocket event for lesson titles generated
+          this.courseGateway.emitLessonTitlesGenerated(
+            course.id,
+            module.id,
+            module.title,
+            lessonTopics.length,
           );
         }
-
-        // Emit WebSocket event for lesson titles generated
-        this.courseGateway.emitLessonTitlesGenerated(
-          course.id,
-          module.id,
-          module.title,
-          lessonTopics.length,
-        );
 
         // Lesson titles created - content will be generated when user opens previous lessons
       }
@@ -355,14 +411,27 @@ export class CourseService {
 
       console.log(`Found ${previousLessons.length} previous lessons in module for context`);
 
-      // Generate content for this lesson with context (using Wikipedia-enabled method)
-      const lessonContent = await this.generationService.generateLessonFromExternalSources(
-        moduleConcept,
-        nextLesson.title,
-        previousLessons,
-        knowledgeLevelText,
-        course.paperContent,
-      );
+      // Check if this is a peripheral concept to use summary generation
+      const importance = this.getConceptImportance(course, moduleConcept);
+      
+      let lessonContent;
+      if (importance === 'peripheral') {
+        // For peripheral concepts, generate a single summary lesson
+        lessonContent = await this.generationService.generateSummaryLesson(
+          moduleConcept,
+          knowledgeLevelText,
+          course.paperContent,
+        );
+      } else {
+        // For central/supporting concepts, generate detailed lessons
+        lessonContent = await this.generationService.generateLessonFromExternalSources(
+          moduleConcept,
+          nextLesson.title,
+          previousLessons,
+          knowledgeLevelText,
+          course.paperContent,
+        );
+      }
 
       // Update the lesson with content
       nextLesson.content = lessonContent.content;
@@ -470,14 +539,27 @@ export class CourseService {
 
       console.log(`Found ${previousLessons.length} previous lessons in module for context`);
 
-      // Generate content for this lesson with context (using Wikipedia-enabled method)
-      const lessonContent = await this.generationService.generateLessonFromExternalSources(
-        moduleConcept,
-        lesson.title,
-        previousLessons,
-        knowledgeLevelText,
-        course.paperContent,
-      );
+      // Check if this is a peripheral concept to use summary generation
+      const importance = this.getConceptImportance(course, moduleConcept);
+      
+      let lessonContent;
+      if (importance === 'peripheral') {
+        // For peripheral concepts, generate a single summary lesson
+        lessonContent = await this.generationService.generateSummaryLesson(
+          moduleConcept,
+          knowledgeLevelText,
+          course.paperContent,
+        );
+      } else {
+        // For central/supporting concepts, generate detailed lessons
+        lessonContent = await this.generationService.generateLessonFromExternalSources(
+          moduleConcept,
+          lesson.title,
+          previousLessons,
+          knowledgeLevelText,
+          course.paperContent,
+        );
+      }
 
       // Update the lesson with content
       lesson.content = lessonContent.content;
