@@ -6,7 +6,7 @@ import { Course } from '../../database/entities/course.entity';
 import { Lesson } from '../../database/entities/lesson.entity';
 import { Module } from '../../database/entities/module.entity';
 import { TemplateHelper } from '../../templates/template-helper';
-const marked = require('marked');
+const { marked } = require('marked');
 
 @Controller('courses')
 export class CourseController {
