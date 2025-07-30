@@ -3,54 +3,65 @@
   import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js';
   import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, updateProfile } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
 
-  // Firebase configuration - placeholder values, replace with actual config
-  const firebaseConfig = {
-    apiKey: "{{FIREBASE_API_KEY}}",
-    authDomain: "{{FIREBASE_AUTH_DOMAIN}}",
-    projectId: "{{FIREBASE_PROJECT_ID}}",
-    storageBucket: "{{FIREBASE_STORAGE_BUCKET}}",
-    messagingSenderId: "{{FIREBASE_MESSAGING_SENDER_ID}}",
-    appId: "{{FIREBASE_APP_ID}}"
-  };
+  let app, auth;
 
-  // Initialize Firebase
-  const app = initializeApp(firebaseConfig);
-  const auth = getAuth(app);
+  // Fetch Firebase configuration from backend and initialize
+  async function initializeFirebase() {
+    try {
+      const response = await fetch('/auth/config');
+      const firebaseConfig = await response.json();
+      
+      // Initialize Firebase
+      app = initializeApp(firebaseConfig);
+      auth = getAuth(app);
+      
+      // Start auth state listener after initialization
+      setupAuthStateListener();
+    } catch (error) {
+      console.error('Failed to load Firebase configuration:', error);
+    }
+  }
+
+  // Setup auth state listener
+  function setupAuthStateListener() {
+    // Auth state observer
+    onAuthStateChanged(auth, async (user) => {
+      currentUser = user;
+      if (user) {
+        // User is signed in
+        updateUI(true);
+        
+        // Send token to backend for verification
+        try {
+          const idToken = await user.getIdToken();
+          const response = await fetch('/auth/verify', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ token: idToken })
+          });
+          
+          if (!response.ok) {
+            console.error('Failed to verify token with backend');
+          }
+        } catch (error) {
+          console.error('Error sending token to backend:', error);
+        }
+      } else {
+        // User is signed out
+        updateUI(false);
+      }
+    });
+  }
 
   let currentUser = null;
 
-  // Auth state observer
-  onAuthStateChanged(auth, async (user) => {
-    currentUser = user;
-    if (user) {
-      // User is signed in
-      updateUI(true);
-      
-      // Send token to backend for verification
-      try {
-        const idToken = await user.getIdToken();
-        const response = await fetch('/auth/verify', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ token: idToken })
-        });
-        
-        if (!response.ok) {
-          console.error('Failed to verify token with backend');
-        }
-      } catch (error) {
-        console.error('Error sending token to backend:', error);
-      }
-    } else {
-      // User is signed out
-      updateUI(false);
-    }
-  });
-
   // Sign in function
   window.signInWithEmail = async (email, password) => {
+    if (!auth) {
+      return { success: false, error: 'Firebase not initialized' };
+    }
     try {
       const result = await signInWithEmailAndPassword(auth, email, password);
       console.log('User signed in:', result.user);
@@ -63,6 +74,9 @@
 
   // Sign up function
   window.signUpWithEmail = async (email, password, displayName) => {
+    if (!auth) {
+      return { success: false, error: 'Firebase not initialized' };
+    }
     try {
       const result = await createUserWithEmailAndPassword(auth, email, password);
       
@@ -81,6 +95,10 @@
 
   // Sign out function
   window.signOutUser = async () => {
+    if (!auth) {
+      console.error('Firebase not initialized');
+      return;
+    }
     try {
       await signOut(auth);
       
@@ -242,4 +260,7 @@
   // Expose auth functions globally
   window.getCurrentUser = () => currentUser;
   window.isUserSignedIn = () => !!currentUser;
+
+  // Initialize Firebase when the script loads
+  initializeFirebase();
 </script>

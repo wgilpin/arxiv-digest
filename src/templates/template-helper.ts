@@ -12,14 +12,7 @@ export class TemplateHelper {
     // Load and inject common components
     const navbar = this.loadComponent('navbar.html');
     const authModal = this.loadComponent('auth-modal.html');
-    const authConfig = this.loadComponent('auth-config.html', {
-      FIREBASE_API_KEY: process.env.FIREBASE_API_KEY || '',
-      FIREBASE_AUTH_DOMAIN: process.env.FIREBASE_AUTH_DOMAIN || '',
-      FIREBASE_PROJECT_ID: process.env.FIREBASE_PROJECT_ID || '',
-      FIREBASE_STORAGE_BUCKET: process.env.FIREBASE_STORAGE_BUCKET || '',
-      FIREBASE_MESSAGING_SENDER_ID: process.env.FIREBASE_MESSAGING_SENDER_ID || '',
-      FIREBASE_APP_ID: process.env.FIREBASE_APP_ID || '',
-    });
+    const authConfig = this.loadComponent('auth-config.html');
 
     // Add common components to variables
     const allVariables = {
