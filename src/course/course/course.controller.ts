@@ -6,7 +6,7 @@ import { Course } from '../../database/entities/course.entity';
 import { Lesson } from '../../database/entities/lesson.entity';
 import { Module } from '../../database/entities/module.entity';
 import { TemplateHelper } from '../../templates/template-helper';
-import { marked } from 'marked';
+const marked = require('marked');
 
 @Controller('courses')
 export class CourseController {
@@ -509,7 +509,7 @@ export class CourseController {
     }
 
     // Convert markdown to HTML
-    let lessonContentHtml = await marked(lesson.content);
+    let lessonContentHtml = marked(lesson.content);
 
     // Post-process to convert mathematical notation from code tags to LaTeX
     lessonContentHtml = this.convertMathCodeToLatex(lessonContentHtml);

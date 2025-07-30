@@ -1,0 +1,245 @@
+<!-- Firebase Auth Configuration -->
+<script type="module">
+  import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js';
+  import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, updateProfile } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
+
+  // Firebase configuration - placeholder values, replace with actual config
+  const firebaseConfig = {
+    apiKey: "{{FIREBASE_API_KEY}}",
+    authDomain: "{{FIREBASE_AUTH_DOMAIN}}",
+    projectId: "{{FIREBASE_PROJECT_ID}}",
+    storageBucket: "{{FIREBASE_STORAGE_BUCKET}}",
+    messagingSenderId: "{{FIREBASE_MESSAGING_SENDER_ID}}",
+    appId: "{{FIREBASE_APP_ID}}"
+  };
+
+  // Initialize Firebase
+  const app = initializeApp(firebaseConfig);
+  const auth = getAuth(app);
+
+  let currentUser = null;
+
+  // Auth state observer
+  onAuthStateChanged(auth, async (user) => {
+    currentUser = user;
+    if (user) {
+      // User is signed in
+      updateUI(true);
+      
+      // Send token to backend for verification
+      try {
+        const idToken = await user.getIdToken();
+        const response = await fetch('/auth/verify', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ token: idToken })
+        });
+        
+        if (!response.ok) {
+          console.error('Failed to verify token with backend');
+        }
+      } catch (error) {
+        console.error('Error sending token to backend:', error);
+      }
+    } else {
+      // User is signed out
+      updateUI(false);
+    }
+  });
+
+  // Sign in function
+  window.signInWithEmail = async (email, password) => {
+    try {
+      const result = await signInWithEmailAndPassword(auth, email, password);
+      console.log('User signed in:', result.user);
+      return { success: true };
+    } catch (error) {
+      console.error('Error signing in:', error);
+      return { success: false, error: error.message };
+    }
+  };
+
+  // Sign up function
+  window.signUpWithEmail = async (email, password, displayName) => {
+    try {
+      const result = await createUserWithEmailAndPassword(auth, email, password);
+      
+      // Update display name if provided
+      if (displayName) {
+        await updateProfile(result.user, { displayName });
+      }
+      
+      console.log('User signed up:', result.user);
+      return { success: true };
+    } catch (error) {
+      console.error('Error signing up:', error);
+      return { success: false, error: error.message };
+    }
+  };
+
+  // Sign out function
+  window.signOutUser = async () => {
+    try {
+      await signOut(auth);
+      
+      // Clear backend session
+      await fetch('/auth/logout', {
+        method: 'POST',
+        credentials: 'include'
+      });
+      
+      console.log('User signed out');
+    } catch (error) {
+      console.error('Error signing out:', error);
+    }
+  };
+
+  // Update UI based on auth state
+  function updateUI(isSignedIn) {
+    const authButton = document.getElementById('authButton');
+    const userInfo = document.getElementById('userInfo');
+    const protectedContent = document.querySelector('.protected-content');
+    const authRequired = document.querySelector('.auth-required');
+    
+    if (isSignedIn && currentUser) {
+      if (authButton) {
+        authButton.innerHTML = `
+          <div class="dropdown dropdown-end">
+            <div tabindex="0" role="button" class="btn btn-ghost btn-circle avatar">
+              <div class="w-10 rounded-full bg-primary text-primary-content flex items-center justify-center">
+                <span class="text-lg font-bold">${(currentUser.displayName || currentUser.email || 'U').charAt(0).toUpperCase()}</span>
+              </div>
+            </div>
+            <ul tabindex="0" class="menu menu-sm dropdown-content mt-3 z-[1] p-2 shadow bg-base-100 rounded-box w-52">
+              <li><span class="text-sm">${currentUser.displayName || 'User'}</span></li>
+              <li><span class="text-xs text-gray-500">${currentUser.email}</span></li>
+              <li><a onclick="signOutUser()">Logout</a></li>
+            </ul>
+          </div>
+        `;
+      }
+      
+      if (userInfo) {
+        userInfo.innerHTML = `Welcome, ${currentUser.displayName || currentUser.email}!`;
+      }
+      
+      if (protectedContent) {
+        protectedContent.style.display = 'block';
+      }
+      
+      if (authRequired) {
+        authRequired.style.display = 'none';
+      }
+    } else {
+      if (authButton) {
+        authButton.innerHTML = '<button class="btn btn-primary" onclick="showAuthModal()">Sign In</button>';
+      }
+      
+      if (userInfo) {
+        userInfo.innerHTML = '';
+      }
+      
+      if (protectedContent) {
+        protectedContent.style.display = 'none';
+      }
+      
+      if (authRequired) {
+        authRequired.style.display = 'block';
+      }
+    }
+  }
+
+  // Show authentication modal
+  window.showAuthModal = () => {
+    const modal = document.getElementById('authModal');
+    if (modal) {
+      modal.showModal();
+    }
+  };
+
+  // Handle auth form submission
+  window.handleAuthSubmit = async (event) => {
+    event.preventDefault();
+    const form = event.target;
+    const formData = new FormData(form);
+    const isSignUp = form.dataset.mode === 'signup';
+    
+    const email = formData.get('email');
+    const password = formData.get('password');
+    const displayName = formData.get('displayName');
+    
+    const errorDiv = document.getElementById('authError');
+    const submitBtn = form.querySelector('button[type="submit"]');
+    
+    // Show loading state
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<span class="loading loading-spinner loading-sm"></span> Processing...';
+    errorDiv.classList.add('hidden');
+    
+    try {
+      let result;
+      if (isSignUp) {
+        result = await signUpWithEmail(email, password, displayName);
+      } else {
+        result = await signInWithEmail(email, password);
+      }
+      
+      if (result.success) {
+        const modal = document.getElementById('authModal');
+        if (modal) {
+          modal.close();
+        }
+      } else {
+        errorDiv.textContent = result.error;
+        errorDiv.classList.remove('hidden');
+      }
+    } catch (error) {
+      errorDiv.textContent = 'An unexpected error occurred';
+      errorDiv.classList.remove('hidden');
+    } finally {
+      // Reset button state
+      submitBtn.disabled = false;
+      submitBtn.innerHTML = isSignUp ? 'Sign Up' : 'Sign In';
+    }
+  };
+
+  // Toggle between sign in and sign up modes
+  window.toggleAuthMode = () => {
+    const form = document.getElementById('authForm');
+    const title = document.getElementById('authTitle');
+    const submitBtn = document.getElementById('authSubmitBtn');
+    const toggleText = document.getElementById('authToggleText');
+    const toggleBtn = document.getElementById('authToggleBtn');
+    const displayNameGroup = document.getElementById('displayNameGroup');
+    
+    const isSignUp = form.dataset.mode === 'signup';
+    
+    if (isSignUp) {
+      // Switch to sign in
+      form.dataset.mode = 'signin';
+      title.textContent = 'Sign In';
+      submitBtn.textContent = 'Sign In';
+      toggleText.textContent = "Don't have an account?";
+      toggleBtn.textContent = 'Sign Up';
+      displayNameGroup.classList.add('hidden');
+    } else {
+      // Switch to sign up
+      form.dataset.mode = 'signup';
+      title.textContent = 'Sign Up';
+      submitBtn.textContent = 'Sign Up';
+      toggleText.textContent = 'Already have an account?';
+      toggleBtn.textContent = 'Sign In';
+      displayNameGroup.classList.remove('hidden');
+    }
+    
+    // Clear any errors
+    const errorDiv = document.getElementById('authError');
+    errorDiv.classList.add('hidden');
+  };
+
+  // Expose auth functions globally
+  window.getCurrentUser = () => currentUser;
+  window.isUserSignedIn = () => !!currentUser;
+</script>

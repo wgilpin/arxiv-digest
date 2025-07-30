@@ -2,11 +2,15 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
 import { Request, Response, NextFunction } from 'express';
+import * as cookieParser from 'cookie-parser';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, { 
     logger: ['error', 'warn', 'log', 'debug', 'verbose']
   });
+
+  // Add cookie parser middleware
+  app.use(cookieParser());
 
   // Add global exception filter for comprehensive error logging
   app.useGlobalFilters(new GlobalExceptionFilter());

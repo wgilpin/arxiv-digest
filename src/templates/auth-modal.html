@@ -1,0 +1,66 @@
+<!-- Authentication Modal -->
+<dialog id="authModal" class="modal">
+  <div class="modal-box">
+    <form method="dialog">
+      <button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2">✕</button>
+    </form>
+    
+    <h3 id="authTitle" class="font-bold text-lg mb-4">Sign In</h3>
+    
+    <form id="authForm" data-mode="signin" onsubmit="handleAuthSubmit(event)">
+      <div class="form-control w-full">
+        <label class="label">
+          <span class="label-text">Email</span>
+        </label>
+        <input 
+          type="email" 
+          name="email" 
+          placeholder="Enter your email" 
+          class="input input-bordered w-full" 
+          required 
+        />
+      </div>
+      
+      <div id="displayNameGroup" class="form-control w-full hidden">
+        <label class="label">
+          <span class="label-text">Display Name</span>
+        </label>
+        <input 
+          type="text" 
+          name="displayName" 
+          placeholder="Enter your display name" 
+          class="input input-bordered w-full" 
+        />
+      </div>
+      
+      <div class="form-control w-full">
+        <label class="label">
+          <span class="label-text">Password</span>
+        </label>
+        <input 
+          type="password" 
+          name="password" 
+          placeholder="Enter your password" 
+          class="input input-bordered w-full" 
+          required 
+          minlength="6"
+        />
+      </div>
+      
+      <div id="authError" class="alert alert-error mt-4 hidden">
+        <span></span>
+      </div>
+      
+      <div class="modal-action">
+        <button id="authSubmitBtn" type="submit" class="btn btn-primary">Sign In</button>
+      </div>
+    </form>
+    
+    <div class="divider">OR</div>
+    
+    <div class="text-center">
+      <span id="authToggleText">Don't have an account?</span>
+      <button id="authToggleBtn" type="button" class="btn btn-link" onclick="toggleAuthMode()">Sign Up</button>
+    </div>
+  </div>
+</dialog>

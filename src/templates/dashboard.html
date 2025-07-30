@@ -9,42 +9,56 @@
   <link href="https://cdn.jsdelivr.net/npm/daisyui@5/themes.css" rel="stylesheet" type="text/css" />
 </head>
 <body>
+  {{NAVBAR}}
+  
   <div class="min-h-screen bg-base-200">
     <div class="container mx-auto p-4">
       <h1 class="text-4xl font-bold text-center mb-8">ArXiv Learning Tool</h1>
       
-      <!-- Create New Course Section -->
-      <div class="card bg-base-100 shadow-xl mb-8">
-        <div class="card-body">
-          <h2 class="card-title text-2xl mb-4">Create New Course</h2>
-          <form id="courseForm" action="/" method="POST" class="form-control">
-            <div class="flex gap-4">
-              <input type="text" name="arxivId" placeholder="Enter ArXiv ID (e.g., 1706.03762)" required class="input input-bordered flex-1">
-              <button type="submit" id="submitBtn" class="btn btn-primary">
-                <span id="submitText">Create Course</span>
-                <span id="loadingSpinner" class="loading loading-spinner loading-sm hidden"></span>
-              </button>
-            </div>
-          </form>
-          
-          <!-- Progress Messages -->
-          <div id="progressMessages" class="mt-4 hidden">
-            <div class="alert alert-info">
-              <span class="loading loading-spinner loading-sm"></span>
-              <div>
-                <div class="font-semibold">Processing your paper...</div>
-                <div id="progressText" class="text-sm">This may take up to 2 minutes</div>
+      <div class="protected-content" style="display: none;">
+        <!-- Create New Course Section -->
+        <div class="card bg-base-100 shadow-xl mb-8">
+          <div class="card-body">
+            <h2 class="card-title text-2xl mb-4">Create New Course</h2>
+            <form id="courseForm" action="/" method="POST" class="form-control">
+              <div class="flex gap-4">
+                <input type="text" name="arxivId" placeholder="Enter ArXiv ID (e.g., 1706.03762)" required class="input input-bordered flex-1">
+                <button type="submit" id="submitBtn" class="btn btn-primary">
+                  <span id="submitText">Create Course</span>
+                  <span id="loadingSpinner" class="loading loading-spinner loading-sm hidden"></span>
+                </button>
+              </div>
+            </form>
+            
+            <!-- Progress Messages -->
+            <div id="progressMessages" class="mt-4 hidden">
+              <div class="alert alert-info">
+                <span class="loading loading-spinner loading-sm"></span>
+                <div>
+                  <div class="font-semibold">Processing your paper...</div>
+                  <div id="progressText" class="text-sm">This may take up to 2 minutes</div>
+                </div>
               </div>
             </div>
           </div>
         </div>
-      </div>
 
-      <!-- Existing Courses Section -->
-      <div class="card bg-base-100 shadow-xl">
-        <div class="card-body">
-          <h2 class="card-title text-2xl mb-4">Your Courses</h2>
-          {{coursesHtml}}
+        <!-- Existing Courses Section -->
+        <div class="card bg-base-100 shadow-xl">
+          <div class="card-body">
+            <h2 class="card-title text-2xl mb-4">Your Courses</h2>
+            {{coursesHtml}}
+          </div>
+        </div>
+      </div>
+      
+      <div class="auth-required text-center">
+        <div class="card bg-base-100 shadow-xl">
+          <div class="card-body">
+            <h2 class="card-title text-2xl mb-4">Welcome to ArXiv Learning Tool</h2>
+            <p class="mb-4">Please sign in to create and manage your personalized learning courses.</p>
+            <div id="userInfo"></div>
+          </div>
         </div>
       </div>
     </div>
@@ -104,5 +118,8 @@
       }
     }
   </script>
+
+  {{AUTH_MODAL}}
+  {{AUTH_CONFIG}}
 </body>
 </html>

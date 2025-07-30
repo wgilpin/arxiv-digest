@@ -62,7 +62,7 @@ To use this application, you need a Google Gemini API key.
 5. Copy the generated API key.
 6. Open your `.env` file and paste the key as the value for `GEMINI_API_KEY`:
 
-    ```
+    ```bash
     GEMINI_API_KEY=your_gemini_api_key_here
     ```
 
