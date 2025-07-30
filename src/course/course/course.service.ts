@@ -638,14 +638,14 @@ export class CourseService {
   async findCourseByIdWithRelations(id: number): Promise<Course | null> {
     return this.courseRepository.findOne({
       where: { id },
-      relations: ['modules', 'modules.lessons'],
+      relations: ['modules', 'modules.lessons', 'user'],
     });
   }
 
   async findLessonById(id: number): Promise<Lesson | null> {
     const lesson = await this.lessonRepository.findOne({
       where: { id },
-      relations: ['module', 'module.course'],
+      relations: ['module', 'module.course', 'module.course.user'],
     });
 
     // If lesson doesn't exist, it might be in a module that hasn't been generated yet
@@ -695,7 +695,7 @@ export class CourseService {
   async findCourseByIdWithProgress(id: number): Promise<Course | null> {
     return this.courseRepository.findOne({
       where: { id },
-      relations: ['modules', 'modules.lessons', 'modules.lessons.progress'],
+      relations: ['modules', 'modules.lessons', 'modules.lessons.progress', 'user'],
     });
   }
 

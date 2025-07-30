@@ -4,8 +4,10 @@ import {
   Column,
   CreateDateColumn,
   OneToMany,
+  ManyToOne,
 } from 'typeorm';
 import { Module } from './module.entity';
+import { User } from './user.entity';
 
 @Entity()
 export class Course {
@@ -14,6 +16,9 @@ export class Course {
 
   @Column()
   paperArxivId: string;
+
+  @Column()
+  userUid: string;
 
   @Column()
   paperTitle: string;
@@ -41,4 +46,7 @@ export class Course {
 
   @OneToMany(() => Module, (module) => module.course, { cascade: true })
   modules: Module[];
+
+  @ManyToOne(() => User, { nullable: false })
+  user: User;
 }

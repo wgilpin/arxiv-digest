@@ -1,6 +1,7 @@
 /* eslint-disable no-useless-escape */
-import { Controller, Get, Post, Delete, Param, Res } from '@nestjs/common';
-import { Response } from 'express';
+import { Controller, Get, Post, Delete, Param, Res, UseGuards, Req } from '@nestjs/common';
+import { Response, Request } from 'express';
+import { AuthGuard } from '../../auth/auth.guard';
 import { CourseService } from './course.service';
 import { Course } from '../../database/entities/course.entity';
 import { Lesson } from '../../database/entities/lesson.entity';
@@ -141,12 +142,18 @@ export class CourseController {
   }
 
   @Get('/:id')
-  async getCoursePage(@Param('id') id: number, @Res() res: Response) {
+  @UseGuards(AuthGuard)
+  async getCoursePage(@Param('id') id: number, @Res() res: Response, @Req() req: Request & { user: any }) {
     const course: Course | null =
       await this.courseService.findCourseByIdWithProgress(id);
 
     if (!course) {
       return res.status(404).send('Course not found');
+    }
+
+    // Security check: Ensure the course belongs to the current user
+    if (course.userUid !== req.user.uid) {
+      return res.status(403).send('Access denied: This course belongs to another user');
     }
 
     // Start lesson content generation before rendering page (so spinner shows)
@@ -474,11 +481,18 @@ export class CourseController {
   }
 
   @Get('/lessons/:id')
-  async getLessonPage(@Param('id') id: number, @Res() res: Response) {
+  @UseGuards(AuthGuard)
+  async getLessonPage(@Param('id') id: number, @Res() res: Response, @Req() req: Request & { user: any }) {
     const lesson: Lesson | null = await this.courseService.findLessonById(id);
 
     if (!lesson) {
       return res.status(404).send('Lesson not found');
+    }
+
+    // Security check: Ensure the lesson belongs to a course owned by the current user
+    const courseOwnerUid = lesson.module.course.userUid;
+    if (courseOwnerUid !== req.user.uid) {
+      return res.status(403).send('Access denied: This lesson belongs to another user');
     }
 
     // Prepare next lesson when user accesses a lesson

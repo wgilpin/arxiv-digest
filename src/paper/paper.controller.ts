@@ -7,8 +7,11 @@ import {
   Param,
   NotFoundException,
   Delete,
+  UseGuards,
+  Req,
 } from '@nestjs/common';
-import { Response } from 'express';
+import { Response, Request } from 'express';
+import { AuthGuard } from '../auth/auth.guard';
 import { ArxivService } from '../arxiv/arxiv.service';
 import { GenerationService } from '../generation/generation/generation.service';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -28,8 +31,10 @@ export class PaperController {
   ) {}
 
   @Get('/')
-  async getDashboard(@Res() res: Response) {
+  @UseGuards(AuthGuard)
+  async getDashboard(@Res() res: Response, @Req() req: Request & { user: any }) {
     const courses = await this.courseRepository.find({
+      where: { userUid: req.user.uid },
       order: { createdAt: 'DESC' },
     });
 
@@ -75,7 +80,8 @@ export class PaperController {
 
 
   @Post('/')
-  async createCourse(@Body('arxivId') arxivId: string, @Res() res: Response) {
+  @UseGuards(AuthGuard)
+  async createCourse(@Body('arxivId') arxivId: string, @Res() res: Response, @Req() req: Request & { user: any }) {
     try {
       const paperTitle = await this.arxivService.fetchPaperTitle(arxivId);
       const paperText = await this.arxivService.getPaperText(arxivId);
@@ -101,6 +107,7 @@ export class PaperController {
         extractedConcepts: extractedConcepts,
         conceptImportance: conceptImportance,
         paperContent: paperText,
+        userUid: req.user.uid,
       });
 
       await this.courseRepository.save(newCourse);
