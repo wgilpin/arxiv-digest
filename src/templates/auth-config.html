@@ -11,6 +11,20 @@
       const response = await fetch('/auth/config');
       const firebaseConfig = await response.json();
       
+      console.log('Received Firebase config:', {
+        apiKey: firebaseConfig.apiKey ? 'SET' : 'MISSING',
+        authDomain: firebaseConfig.authDomain ? 'SET' : 'MISSING',
+        projectId: firebaseConfig.projectId ? 'SET' : 'MISSING',
+        storageBucket: firebaseConfig.storageBucket ? 'SET' : 'MISSING',
+        messagingSenderId: firebaseConfig.messagingSenderId ? 'SET' : 'MISSING',
+        appId: firebaseConfig.appId ? 'SET' : 'MISSING'
+      });
+      
+      // Check if we have required config
+      if (!firebaseConfig.apiKey || !firebaseConfig.authDomain || !firebaseConfig.projectId) {
+        throw new Error('Missing required Firebase configuration');
+      }
+      
       // Initialize Firebase
       app = initializeApp(firebaseConfig);
       auth = getAuth(app);

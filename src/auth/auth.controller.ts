@@ -57,7 +57,7 @@ export class AuthController {
 
   @Get('config')
   getFirebaseConfig() {
-    return {
+    const config = {
       apiKey: process.env.FIREBASE_API_KEY,
       authDomain: process.env.FIREBASE_AUTH_DOMAIN,
       projectId: process.env.FIREBASE_PROJECT_ID,
@@ -65,6 +65,17 @@ export class AuthController {
       messagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID,
       appId: process.env.FIREBASE_APP_ID
     };
+    
+    console.log('Firebase config being returned:', {
+      apiKey: config.apiKey ? 'SET' : 'MISSING',
+      authDomain: config.authDomain ? 'SET' : 'MISSING',
+      projectId: config.projectId ? 'SET' : 'MISSING',
+      storageBucket: config.storageBucket ? 'SET' : 'MISSING',
+      messagingSenderId: config.messagingSenderId ? 'SET' : 'MISSING',
+      appId: config.appId ? 'SET' : 'MISSING'
+    });
+    
+    return config;
   }
 
   @Get('me')
