@@ -410,8 +410,22 @@ export class CourseController {
     const course = await this.courseService.findCourseByIdWithRelations(req.user.uid, courseId);
     const navigation = course ? this.getLessonNavigation(course, moduleIdx, lessonIdx) : { previous: null, next: null };
 
-    // Only prepare next lesson if the next lesson doesn't have content yet
-    if (course && navigation.next && !navigation.next.hasContent) {
+    // Generate lesson content in these cases:
+    // 1. This is the first lesson of the course and it has no content
+    // 2. The next lesson doesn't have content yet
+    const isFirstLesson = moduleIdx === 0 && lessonIdx === 0;
+    const currentLessonNeedsContent = !lesson.content || lesson.content === '';
+    const nextLessonNeedsContent = course && navigation.next && !navigation.next.hasContent;
+    
+    if (currentLessonNeedsContent && isFirstLesson) {
+      console.log(`User accessed first lesson ${courseId}/${moduleIdx}/${lessonIdx} (${lesson.title}) with no content, triggering generation`);
+      
+      setImmediate(() => {
+        this.courseService.prepareNextLesson(req.user.uid, courseId).catch((error) => {
+          console.error('Background lesson preparation failed:', error);
+        });
+      });
+    } else if (nextLessonNeedsContent) {
       console.log(`User accessed lesson ${courseId}/${moduleIdx}/${lessonIdx} (${lesson.title}), next lesson has no content, triggering background generation`);
       
       setImmediate(() => {
@@ -452,7 +466,7 @@ export class CourseController {
 
     const nextLessonHtml = navigation.next ? 
       `<a href="/courses/lessons/${courseId}/${navigation.next.moduleIndex}/${navigation.next.lessonIndex}" 
-         class="btn btn-outline btn-primary lesson-nav-btn${!navigation.next.hasContent ? ' btn-disabled' : ''}"
+         class="btn btn-outline btn-primary lesson-nav-btn"
          title="${navigation.next.title}">
          Next Lesson <span class="ml-2">→</span>
        </a>` : '';
