@@ -1,6 +1,7 @@
 import { Injectable, Inject, forwardRef } from '@nestjs/common';
 import { CourseRepository } from '../../data/repositories/course.repository';
-import { Course, Module, Lesson } from '../../firestore/interfaces/firestore.interfaces';
+import { ModelCostRepository } from '../../data/repositories/model-cost.repository';
+import { Course, Module, Lesson, ModelCost } from '../../firestore/interfaces/firestore.interfaces';
 import { GenerationService } from '../../generation/generation/generation.service';
 import { CourseGateway } from './course.gateway';
 
@@ -11,6 +12,7 @@ export class CourseService {
 
   constructor(
     private courseRepository: CourseRepository,
+    private modelCostRepository: ModelCostRepository,
     private generationService: GenerationService,
     @Inject(forwardRef(() => CourseGateway))
     private courseGateway: CourseGateway,
@@ -119,6 +121,10 @@ export class CourseService {
           const lessonTopics = await this.generationService.generateLessonTopics(
             firstConcept,
           );
+          
+          // Capture token usage from lesson topics generation
+          const tokenUsage = this.generationService.getAndResetTokenUsage();
+          await this.updateCourseTokenUsage(userId, courseId, tokenUsage);
 
           // Create lesson placeholders for first module only
           for (
@@ -238,6 +244,10 @@ export class CourseService {
           // For central/supporting concepts, generate multiple lesson topics
           const lessonTopics =
             await this.generationService.generateLessonTopics(concept);
+            
+          // Capture token usage from lesson topics generation
+          const tokenUsage = this.generationService.getAndResetTokenUsage();
+          await this.updateCourseTokenUsage(userId, courseId, tokenUsage);
 
           // Create lesson placeholders
           module.lessons = [];
@@ -398,6 +408,10 @@ export class CourseService {
           course.paperContent,
         );
       }
+      
+      // Capture token usage from lesson content generation
+      const tokenUsage = this.generationService.getAndResetTokenUsage();
+      await this.updateCourseTokenUsage(userId, courseId, tokenUsage);
 
       // Update the lesson with content
       nextLesson.content = lessonContent.content;
@@ -429,6 +443,116 @@ export class CourseService {
         this.currentGeneratingLessons.delete(currentLessonId);
       }
     }
+  }
+
+  /**
+   * Updates the course with accumulated token usage by model
+   */
+  private async updateCourseTokenUsage(
+    userId: string, 
+    courseId: string, 
+    tokenUsageByModel: Record<string, { inputTokens: number; outputTokens: number; totalTokens: number }>
+  ): Promise<void> {
+    // Check if there are any tokens to add
+    const hasTokens = Object.values(tokenUsageByModel).some(usage => usage.totalTokens > 0);
+    if (!hasTokens) return;
+    
+    const course = await this.courseRepository.findById(userId, courseId);
+    if (!course) return;
+    
+    // Initialize tokenUsageByModel if it doesn't exist
+    const currentTokenUsage = course.tokenUsageByModel || {};
+    
+    // Accumulate token usage by model
+    for (const [modelName, usage] of Object.entries(tokenUsageByModel)) {
+      if (!currentTokenUsage[modelName]) {
+        currentTokenUsage[modelName] = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
+      }
+      
+      currentTokenUsage[modelName].inputTokens += usage.inputTokens;
+      currentTokenUsage[modelName].outputTokens += usage.outputTokens;
+      currentTokenUsage[modelName].totalTokens += usage.totalTokens;
+    }
+    
+    // Calculate legacy totals for backward compatibility
+    let totalInput = 0, totalOutput = 0, totalTokens = 0;
+    for (const usage of Object.values(currentTokenUsage)) {
+      totalInput += usage.inputTokens;
+      totalOutput += usage.outputTokens;
+      totalTokens += usage.totalTokens;
+    }
+    
+    const updateData = {
+      tokenUsageByModel: currentTokenUsage,
+      inputTokens: totalInput,
+      outputTokens: totalOutput,
+      totalTokens: totalTokens,
+    };
+    
+    await this.courseRepository.update(userId, courseId, updateData);
+    
+    // Log the update
+    for (const [modelName, usage] of Object.entries(tokenUsageByModel)) {
+      console.log(`Updated course ${courseId} token usage for ${modelName}: +${usage.inputTokens} input, +${usage.outputTokens} output, +${usage.totalTokens} total`);
+    }
+  }
+
+  /**
+   * Calculates the generation cost for a course based on token usage and model costs
+   */
+  async calculateCourseGenerationCost(course: Course): Promise<number> {
+    if (!course.tokenUsageByModel) {
+      return 0;
+    }
+
+    const modelCostMap = await this.modelCostRepository.getModelCostMap();
+    let totalCost = 0;
+
+    for (const [modelName, usage] of Object.entries(course.tokenUsageByModel)) {
+      const modelCost = modelCostMap[modelName];
+      if (!modelCost) {
+        console.warn(`No cost data found for model: ${modelName}`);
+        continue;
+      }
+
+      // Calculate cost: (tokens / 1,000,000) * cost_per_million
+      const inputCost = (usage.inputTokens / 1_000_000) * modelCost.costPerMillionInputTokens;
+      const outputCost = (usage.outputTokens / 1_000_000) * modelCost.costPerMillionOutputTokens;
+      
+      totalCost += inputCost + outputCost;
+    }
+
+    return totalCost;
+  }
+
+  /**
+   * Calculates generation costs for multiple courses efficiently
+   */
+  async calculateMultipleCoursesCosts(courses: Course[]): Promise<Record<string, number>> {
+    const modelCostMap = await this.modelCostRepository.getModelCostMap();
+    const costs: Record<string, number> = {};
+
+    for (const course of courses) {
+      if (!course.id) continue;
+      
+      let totalCost = 0;
+      
+      if (course.tokenUsageByModel) {
+        for (const [modelName, usage] of Object.entries(course.tokenUsageByModel)) {
+          const modelCost = modelCostMap[modelName];
+          if (!modelCost) continue;
+
+          const inputCost = (usage.inputTokens / 1_000_000) * modelCost.costPerMillionInputTokens;
+          const outputCost = (usage.outputTokens / 1_000_000) * modelCost.costPerMillionOutputTokens;
+          
+          totalCost += inputCost + outputCost;
+        }
+      }
+      
+      costs[course.id] = totalCost;
+    }
+
+    return costs;
   }
 
   /**

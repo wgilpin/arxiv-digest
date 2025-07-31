@@ -21,39 +21,44 @@
     };
   </script>
   <style>
-    .lesson-content h1, .lesson-content h2, .lesson-content h3 { 
+    /* Override prose class styling with higher specificity */
+    .prose h1, .prose h2, .prose h3, .prose h4, .prose h5, .prose h6 { 
+      font-weight: bold !important;
       margin-top: 1.5rem; 
       margin-bottom: 1rem; 
-      font-weight: bold; 
     }
-    .lesson-content h2 { font-size: 1.5rem; }
-    .lesson-content h3 { font-size: 1.25rem; }
-    .lesson-content p { margin-bottom: 1rem; line-height: 1.6; }
-    .lesson-content ul, .lesson-content ol { margin-bottom: 1rem; padding-left: 1.5rem; }
-    .lesson-content li { margin-bottom: 0.5rem; }
-    .lesson-content code { 
+    .prose h1 { font-size: 2rem !important; }
+    .prose h2 { font-size: 1.5rem !important; }
+    .prose h3 { font-size: 1.25rem !important; }
+    .prose h4 { font-size: 1.125rem !important; }
+    .prose h5 { font-size: 1rem !important; }
+    .prose h6 { font-size: 0.875rem !important; }
+    .prose p { margin-bottom: 1rem; line-height: 1.6; }
+    .prose ul, .prose ol { margin-bottom: 1rem; padding-left: 1.5rem; }
+    .prose li { margin-bottom: 0.5rem; }
+    .prose code { 
       background-color: #f3f4f6; 
       padding: 0.25rem 0.5rem; 
       border-radius: 0.25rem; 
       font-family: monospace; 
     }
-    .lesson-content pre { 
+    .prose pre { 
       background-color: #f3f4f6; 
       padding: 1rem; 
       border-radius: 0.5rem; 
       overflow-x: auto; 
       margin-bottom: 1rem; 
     }
-    .lesson-content blockquote { 
+    .prose blockquote { 
       border-left: 4px solid #e5e7eb; 
       padding-left: 1rem; 
       margin: 1rem 0; 
       font-style: italic; 
     }
-    .lesson-content .MathJax {
+    .prose .MathJax {
       font-size: 1.1em !important;
     }
-    .lesson-content mjx-container[jax="CHTML"] {
+    .prose mjx-container[jax="CHTML"] {
       line-height: 1.4;
     }
     p {

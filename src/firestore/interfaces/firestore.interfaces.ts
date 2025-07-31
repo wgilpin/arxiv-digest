@@ -19,6 +19,12 @@ export interface Module {
   lessons: Lesson[];
 }
 
+export interface ModelTokenUsage {
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+}
+
 export interface Course {
   id?: string;
   title: string;
@@ -35,6 +41,21 @@ export interface Course {
   paperContent?: string;
   plannedConcepts?: string;
   knowledgeLevels?: Record<string, number>;
+  tokenUsageByModel?: Record<string, ModelTokenUsage>;
+  // Legacy fields for backward compatibility
+  inputTokens?: number;
+  outputTokens?: number;
+  totalTokens?: number;
+}
+
+export interface ModelCost {
+  id?: string;
+  modelName: string;
+  costPerMillionInputTokens: number;
+  costPerMillionOutputTokens: number;
+  isActive: boolean;
+  updatedAt: Date;
+  description?: string;
 }
 
 export interface CourseProgress {

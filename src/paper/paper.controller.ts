@@ -62,16 +62,24 @@ export class PaperController {
 
     let coursesHtml = '';
     if (courses.length > 0) {
+      // Calculate costs for all courses efficiently
+      const courseCosts = await this.courseService.calculateMultipleCoursesCosts(courses);
+      
       coursesHtml = courses
         .map(
-          (course) => `
+          (course) => {
+            const cost = courseCosts[course.id || ''] || 0;
+            const costDisplay = cost > 0 ? `$${cost.toFixed(4)}` : 'Free';
+            
+            return `
         <div class="card bg-base-200 shadow-sm mb-4">
           <div class="card-body">
             <h3 class="card-title text-lg">${course.paperTitle}</h3>
             <p class="text-sm text-gray-600 mb-2">ArXiv ID: ${
               course.arxivId
             }</p>
-            <p class="text-sm text-gray-600 mb-4">Created: ${this.formatDate(course.createdAt)}</p>
+            <p class="text-sm text-gray-600 mb-2">Created: ${this.formatDate(course.createdAt)}</p>
+            <p class="text-sm text-green-600 mb-4">Generation Cost: <span class="font-semibold">${costDisplay}</span></p>
             <div class="card-actions justify-end">
               <a href="/courses/${
                 course.id
@@ -80,7 +88,8 @@ export class PaperController {
             </div>
           </div>
         </div>
-      `,
+      `;
+          }
         )
         .join('');
     } else {
@@ -108,6 +117,9 @@ export class PaperController {
       const conceptsWithImportance = 
         await this.generationService.extractConceptsWithImportance(paperText);
 
+      // Capture token usage from concept extraction
+      const tokenUsageByModel = this.generationService.getAndResetTokenUsage();
+
       // Extract concept names for backward compatibility
       const extractedConcepts = conceptsWithImportance.map(item => item.concept);
       
@@ -119,6 +131,14 @@ export class PaperController {
           reasoning: item.reasoning
         };
       });
+
+      // Calculate legacy totals for backward compatibility
+      let totalInput = 0, totalOutput = 0, totalTokens = 0;
+      for (const usage of Object.values(tokenUsageByModel)) {
+        totalInput += usage.inputTokens;
+        totalOutput += usage.outputTokens;
+        totalTokens += usage.totalTokens;
+      }
 
       const courseId = await this.courseRepository.createCourse(req.user.uid, {
         arxivId: arxivId,
@@ -133,6 +153,10 @@ export class PaperController {
         extractedConcepts: extractedConcepts,
         conceptImportance: conceptImportance,
         paperContent: paperText,
+        tokenUsageByModel: tokenUsageByModel,
+        inputTokens: totalInput,
+        outputTokens: totalOutput,
+        totalTokens: totalTokens,
       });
 
       res.redirect(`/${courseId}/assess`);
