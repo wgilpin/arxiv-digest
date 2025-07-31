@@ -53,8 +53,8 @@ export interface ModelCost {
   modelName: string;
   costPerMillionInputTokens: number;
   costPerMillionOutputTokens: number;
-  isActive: boolean;
-  updatedAt: Date;
+  isActive?: boolean;
+  updatedAt?: Date;
   description?: string;
 }
 

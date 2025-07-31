@@ -69,7 +69,7 @@ export class PaperController {
         .map(
           (course) => {
             const cost = courseCosts[course.id || ''] || 0;
-            const costDisplay = cost > 0 ? `$${cost.toFixed(4)}` : 'Free';
+            const costDisplay = cost > 0 ? `$${cost.toFixed(2)}` : 'Free';
             
             return `
         <div class="card bg-base-200 shadow-sm mb-4">

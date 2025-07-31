@@ -9,22 +9,22 @@ export class ModelCostRepository {
   constructor(private firestoreService: FirestoreService) {}
 
   /**
-   * Find all active model costs
+   * Find all model costs
    */
   async findAllActive(): Promise<ModelCost[]> {
     try {
       const firestore = this.firestoreService.getFirestore();
       const snapshot = await firestore
         .collection(this.collectionName)
-        .where('isActive', '==', true)
         .get();
 
       return snapshot.docs.map((doc: any) => ({
         id: doc.id,
+        modelName: doc.id, // Use document ID as model name
         ...doc.data(),
       })) as ModelCost[];
     } catch (error) {
-      console.error('Error fetching active model costs:', error);
+      console.error('Error fetching model costs:', error);
       return [];
     }
   }
@@ -35,20 +35,18 @@ export class ModelCostRepository {
   async findByModelName(modelName: string): Promise<ModelCost | null> {
     try {
       const firestore = this.firestoreService.getFirestore();
-      const snapshot = await firestore
+      const doc = await firestore
         .collection(this.collectionName)
-        .where('modelName', '==', modelName)
-        .where('isActive', '==', true)
-        .limit(1)
+        .doc(modelName)
         .get();
 
-      if (snapshot.empty) {
+      if (!doc.exists) {
         return null;
       }
 
-      const doc = snapshot.docs[0];
       return {
         id: doc.id,
+        modelName: doc.id,
         ...doc.data(),
       } as ModelCost;
     } catch (error) {

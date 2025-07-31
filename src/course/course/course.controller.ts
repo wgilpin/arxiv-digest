@@ -105,6 +105,53 @@ export class CourseController {
     return `<span class="badge ${badgeClasses[importance]} badge-sm ml-2">${labels[importance]}</span>`;
   }
 
+  /**
+   * Gets navigation information for a lesson (previous/next lesson)
+   */
+  private getLessonNavigation(course: Course, currentModuleIndex: number, currentLessonIndex: number): {
+    previous: { moduleIndex: number; lessonIndex: number; title: string; hasContent: boolean } | null;
+    next: { moduleIndex: number; lessonIndex: number; title: string; hasContent: boolean } | null;
+  } {
+    if (!course?.modules) {
+      return { previous: null, next: null };
+    }
+
+    // Build a flat list of all lessons with their indices
+    const allLessons: Array<{
+      moduleIndex: number;
+      lessonIndex: number;
+      title: string;
+      hasContent: boolean;
+    }> = [];
+
+    course.modules.forEach((module, moduleIndex) => {
+      if (module.lessons) {
+        module.lessons.forEach((lesson, lessonIndex) => {
+          allLessons.push({
+            moduleIndex,
+            lessonIndex,
+            title: lesson.title,
+            hasContent: !!(lesson.content && lesson.content !== '')
+          });
+        });
+      }
+    });
+
+    // Find current lesson in the flat list
+    const currentIndex = allLessons.findIndex(
+      lesson => lesson.moduleIndex === currentModuleIndex && lesson.lessonIndex === currentLessonIndex
+    );
+
+    if (currentIndex === -1) {
+      return { previous: null, next: null };
+    }
+
+    return {
+      previous: currentIndex > 0 ? allLessons[currentIndex - 1] : null,
+      next: currentIndex < allLessons.length - 1 ? allLessons[currentIndex + 1] : null
+    };
+  }
+
   @Get('/:id/modules-html')
   @UseGuards(AuthGuard)
   async getModulesHtml(@Param('id') id: string, @Res() res: Response, @Req() req: Request & { user: { uid: string } }) {
@@ -224,16 +271,11 @@ export class CourseController {
       return res.status(404).send('Course not found');
     }
 
-    // Start lesson content generation before rendering page (so spinner shows)
-    this.courseService
-      .prepareNextLesson(req.user.uid, id)
-      .then(() => {
-        // Generate remaining lesson titles for modules that don't have them yet
-        return this.courseService.generateRemainingLessonTitles(req.user.uid, id);
-      })
-      .catch((error) => {
-        console.error('Course initialization failed:', error);
-      });
+    // Only generate lesson titles for modules that don't have them yet
+    // Don't automatically start lesson content generation when just viewing the course
+    this.courseService.generateRemainingLessonTitles(req.user.uid, id).catch((error) => {
+      console.error('Course title generation failed:', error);
+    });
 
     // Don't wait for generation to complete, but ensure it starts before rendering
 
@@ -364,14 +406,25 @@ export class CourseController {
 
     const { lesson, courseId: returnedCourseId } = lessonData;
 
-    // Prepare next lesson when user accesses a lesson
-    console.log(`User accessed lesson ${courseId}/${moduleIdx}/${lessonIdx} (${lesson.title}), triggering background generation`);
-    
-    setImmediate(() => {
-      this.courseService.prepareNextLesson(req.user.uid, courseId).catch((error) => {
-        console.error('Background lesson preparation failed:', error);
+    // Get the full course to determine navigation
+    const course = await this.courseService.findCourseByIdWithRelations(req.user.uid, courseId);
+    const navigation = course ? this.getLessonNavigation(course, moduleIdx, lessonIdx) : { previous: null, next: null };
+
+    // Only prepare next lesson if the next lesson doesn't have content yet
+    if (course && navigation.next && !navigation.next.hasContent) {
+      console.log(`User accessed lesson ${courseId}/${moduleIdx}/${lessonIdx} (${lesson.title}), next lesson has no content, triggering background generation`);
+      
+      setImmediate(() => {
+        this.courseService.prepareNextLesson(req.user.uid, courseId).catch((error) => {
+          console.error('Background lesson preparation failed:', error);
+        });
       });
-    });
+    } else if (course && !navigation.next) {
+      // This is the last lesson - check if there are more modules to generate titles for
+      this.courseService.generateRemainingLessonTitles(req.user.uid, courseId).catch((error) => {
+        console.error('Background lesson title generation failed:', error);
+      });
+    }
 
     // Check if lesson has content
     if (!lesson.content || lesson.content === '') {
@@ -389,11 +442,28 @@ export class CourseController {
     // Post-process to convert mathematical notation from code tags to LaTeX
     lessonContentHtml = this.convertMathCodeToLatex(lessonContentHtml);
 
+    // Generate navigation HTML
+    const previousLessonHtml = navigation.previous ? 
+      `<a href="/courses/lessons/${courseId}/${navigation.previous.moduleIndex}/${navigation.previous.lessonIndex}" 
+         class="btn btn-outline btn-primary lesson-nav-btn${!navigation.previous.hasContent ? ' btn-disabled' : ''}"
+         title="${navigation.previous.title}">
+         <span class="mr-2">←</span> Previous Lesson
+       </a>` : '';
+
+    const nextLessonHtml = navigation.next ? 
+      `<a href="/courses/lessons/${courseId}/${navigation.next.moduleIndex}/${navigation.next.lessonIndex}" 
+         class="btn btn-outline btn-primary lesson-nav-btn${!navigation.next.hasContent ? ' btn-disabled' : ''}"
+         title="${navigation.next.title}">
+         Next Lesson <span class="ml-2">→</span>
+       </a>` : '';
+
     const html = TemplateHelper.renderTemplate('lesson-page.html', {
       lessonTitle: lesson.title,
       lessonContent: lessonContentHtml,
       courseId: courseId,
       lessonId: `${courseId}-${moduleIdx}-${lessonIdx}`,
+      previousLessonHtml: previousLessonHtml,
+      nextLessonHtml: nextLessonHtml,
     });
     res.send(html);
   }
@@ -417,14 +487,25 @@ export class CourseController {
 
       await this.courseService.markLessonComplete(req.user.uid, courseId, moduleIdx, lessonIdx);
 
-      console.log(`User completed lesson ${courseId}/${moduleIdx}/${lessonIdx}, triggering background generation`);
+      // Get course navigation to check if next lesson needs content
+      const course = await this.courseService.findCourseByIdWithRelations(req.user.uid, courseId);
+      const navigation = course ? this.getLessonNavigation(course, moduleIdx, lessonIdx) : { previous: null, next: null };
       
-      // Trigger background generation of next lesson
-      setImmediate(() => {
-        this.courseService.prepareNextLesson(req.user.uid, courseId).catch((error) => {
-          console.error('Background lesson preparation after completion failed:', error);
+      // Only trigger generation if the next lesson doesn't have content yet
+      if (course && navigation.next && !navigation.next.hasContent) {
+        console.log(`User completed lesson ${courseId}/${moduleIdx}/${lessonIdx}, next lesson has no content, triggering background generation`);
+        
+        setImmediate(() => {
+          this.courseService.prepareNextLesson(req.user.uid, courseId).catch((error) => {
+            console.error('Background lesson preparation after completion failed:', error);
+          });
         });
-      });
+      } else if (course && !navigation.next) {
+        // This was the last lesson - check if there are more modules to generate titles for
+        this.courseService.generateRemainingLessonTitles(req.user.uid, courseId).catch((error) => {
+          console.error('Background lesson title generation after completion failed:', error);
+        });
+      }
       
       res.redirect(`/courses/${courseId}`);
     } catch (error) {
