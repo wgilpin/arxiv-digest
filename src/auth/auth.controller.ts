@@ -39,6 +39,7 @@ export class AuthController {
         },
       });
     } catch (error) {
+      console.error('Token verification failed:', error);
       return res.status(HttpStatus.UNAUTHORIZED).json({
         success: false,
         message: 'Invalid token',
@@ -82,6 +83,156 @@ export class AuthController {
     }
     
     return config;
+  }
+
+  @Get('login')
+  async getLoginPage(@Res() res: Response) {
+    const loginHtml = `
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - ArXiv Learning Tool</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/daisyui@4.12.10/dist/full.min.css" rel="stylesheet" type="text/css" />
+</head>
+<body class="min-h-screen bg-base-200 flex items-center justify-center">
+    <div class="card w-96 bg-base-100 shadow-xl">
+        <div class="card-body">
+            <h2 class="card-title justify-center mb-6">Sign in to ArXiv Learning Tool</h2>
+            
+            <form id="login-form" class="space-y-4">
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text">Email</span>
+                    </label>
+                    <input type="email" id="email" placeholder="Enter your email" class="input input-bordered w-full" required />
+                </div>
+                
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text">Password</span>
+                    </label>
+                    <input type="password" id="password" placeholder="Enter your password" class="input input-bordered w-full" required />
+                </div>
+                
+                <button type="submit" class="btn btn-primary w-full">Sign In</button>
+            </form>
+            
+            <div class="divider">New to the platform?</div>
+            
+            <form id="register-form" class="space-y-4" style="display: none;">
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text">Email</span>
+                    </label>
+                    <input type="email" id="reg-email" placeholder="Enter your email" class="input input-bordered w-full" required />
+                </div>
+                
+                <div class="form-control">
+                    <label class="label">
+                        <span class="label-text">Password</span>
+                    </label>
+                    <input type="password" id="reg-password" placeholder="Enter your password" class="input input-bordered w-full" required />
+                </div>
+                
+                <button type="submit" class="btn btn-primary w-full">Create Account</button>
+            </form>
+            
+            <button id="toggle-form" class="btn btn-ghost w-full">Create Account</button>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+        import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
+
+        // Get Firebase config
+        const configResponse = await fetch('/auth/config');
+        const firebaseConfig = await configResponse.json();
+        
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+
+        const loginForm = document.getElementById('login-form');
+        const registerForm = document.getElementById('register-form');
+        const toggleButton = document.getElementById('toggle-form');
+        let isLoginMode = true;
+
+        toggleButton.addEventListener('click', () => {
+            isLoginMode = !isLoginMode;
+            if (isLoginMode) {
+                loginForm.style.display = 'block';
+                registerForm.style.display = 'none';
+                toggleButton.textContent = 'Create Account';
+            } else {
+                loginForm.style.display = 'none';
+                registerForm.style.display = 'block';
+                toggleButton.textContent = 'Back to Sign In';
+            }
+        });
+
+        loginForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            
+            try {
+                const result = await signInWithEmailAndPassword(auth, email, password);
+                const idToken = await result.user.getIdToken();
+                
+                const response = await fetch('/auth/verify', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ token: idToken }),
+                });
+
+                if (response.ok) {
+                    window.location.href = '/';
+                } else {
+                    alert('Authentication failed');
+                }
+            } catch (error) {
+                console.error('Error during sign-in:', error);
+                alert('Sign-in failed: ' + error.message);
+            }
+        });
+
+        registerForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = document.getElementById('reg-email').value;
+            const password = document.getElementById('reg-password').value;
+            
+            try {
+                const result = await createUserWithEmailAndPassword(auth, email, password);
+                const idToken = await result.user.getIdToken();
+                
+                const response = await fetch('/auth/verify', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ token: idToken }),
+                });
+
+                if (response.ok) {
+                    window.location.href = '/';
+                } else {
+                    alert('Authentication failed');
+                }
+            } catch (error) {
+                console.error('Error during registration:', error);
+                alert('Registration failed: ' + error.message);
+            }
+        });
+    </script>
+</body>
+</html>`;
+    
+    res.send(loginHtml);
   }
 
   @Get('me')

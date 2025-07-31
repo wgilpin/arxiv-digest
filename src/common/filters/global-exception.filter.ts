@@ -49,12 +49,14 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       console.error('=========================');
     }
 
-    // Send error response
-    response.status(httpStatus).json({
-      statusCode: httpStatus,
-      timestamp: new Date().toISOString(),
-      path: request.url,
-      message: typeof message === 'string' ? message : JSON.stringify(message),
-    });
+    // Send error response only if headers haven't been sent
+    if (!response.headersSent) {
+      response.status(httpStatus).json({
+        statusCode: httpStatus,
+        timestamp: new Date().toISOString(),
+        path: request.url,
+        message: typeof message === 'string' ? message : JSON.stringify(message),
+      });
+    }
   }
 }

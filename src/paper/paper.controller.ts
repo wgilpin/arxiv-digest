@@ -6,7 +6,6 @@ import {
   Res,
   Param,
   NotFoundException,
-  Delete,
   UseGuards,
   Req,
 } from '@nestjs/common';
@@ -14,9 +13,7 @@ import { Response, Request } from 'express';
 import { AuthGuard } from '../auth/auth.guard';
 import { ArxivService } from '../arxiv/arxiv.service';
 import { GenerationService } from '../generation/generation/generation.service';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { Course } from '../database/entities/course.entity';
+import { CourseRepository } from '../data/repositories/course.repository';
 import { CourseService } from '../course/course/course.service';
 import { TemplateHelper } from '../templates/template-helper';
 
@@ -25,18 +22,43 @@ export class PaperController {
   constructor(
     private readonly arxivService: ArxivService,
     private readonly generationService: GenerationService,
-    @InjectRepository(Course)
-    private courseRepository: Repository<Course>,
+    private readonly courseRepository: CourseRepository,
     private readonly courseService: CourseService,
   ) {}
 
+  private formatDate(date: any): string {
+    try {
+      if (date instanceof Date) {
+        return date.toLocaleDateString();
+      }
+      if (date && typeof date.toDate === 'function') {
+        // Firestore Timestamp
+        return date.toDate().toLocaleDateString();
+      }
+      if (typeof date === 'string' || typeof date === 'number') {
+        const parsedDate = new Date(date);
+        const dateString = parsedDate.toLocaleDateString();
+        if (dateString === 'Invalid Date') {
+          return 'Invalid date';
+        }
+        return dateString;
+      }
+      return 'Unknown date';
+    } catch (error) {
+      console.error('Error formatting date:', error);
+      return 'Invalid date';
+    }
+  }
+
+  private escapeJavaScript(str: any): string {
+    if (str == null) return '';
+    return String(str).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '\\"');
+  }
+
   @Get('/')
   @UseGuards(AuthGuard)
-  async getDashboard(@Res() res: Response, @Req() req: Request & { user: any }) {
-    const courses = await this.courseRepository.find({
-      where: { userUid: req.user.uid },
-      order: { createdAt: 'DESC' },
-    });
+  async getDashboard(@Res() res: Response, @Req() req: Request & { user: { uid: string } }) {
+    const courses = await this.courseRepository.findAll(req.user.uid);
 
     let coursesHtml = '';
     if (courses.length > 0) {
@@ -47,16 +69,14 @@ export class PaperController {
           <div class="card-body">
             <h3 class="card-title text-lg">${course.paperTitle}</h3>
             <p class="text-sm text-gray-600 mb-2">ArXiv ID: ${
-              course.paperArxivId
+              course.arxivId
             }</p>
-            <p class="text-sm text-gray-600 mb-4">Created: ${course.createdAt.toLocaleDateString()}</p>
+            <p class="text-sm text-gray-600 mb-4">Created: ${this.formatDate(course.createdAt)}</p>
             <div class="card-actions justify-end">
               <a href="/courses/${
                 course.id
               }" class="btn btn-primary btn-sm">View Course</a>
-              <button class="btn btn-error btn-sm" onclick="confirmDelete(${
-                course.id
-              })">Delete</button>
+              <button class="btn btn-error btn-sm" onclick="confirmDelete('${this.escapeJavaScript(course.id)}')">Delete</button>
             </div>
           </div>
         </div>
@@ -81,7 +101,7 @@ export class PaperController {
 
   @Post('/')
   @UseGuards(AuthGuard)
-  async createCourse(@Body('arxivId') arxivId: string, @Res() res: Response, @Req() req: Request & { user: any }) {
+  async createCourse(@Body('arxivId') arxivId: string, @Res() res: Response, @Req() req: Request & { user: { uid: string } }) {
     try {
       const paperTitle = await this.arxivService.fetchPaperTitle(arxivId);
       const paperText = await this.arxivService.getPaperText(arxivId);
@@ -100,19 +120,22 @@ export class PaperController {
         };
       });
 
-      const newCourse = this.courseRepository.create({
-        paperArxivId: arxivId,
+      const courseId = await this.courseRepository.createCourse(req.user.uid, {
+        arxivId: arxivId,
+        title: paperTitle,
+        description: `Learning course for ${paperTitle}`,
         paperTitle: paperTitle,
-        comprehensionLevel: 'beginner', // Default for now
+        paperAuthors: [], // TODO: Extract from ArXiv
+        paperUrl: `https://arxiv.org/abs/${arxivId}`,
+        modules: [],
+        createdAt: new Date(),
+        updatedAt: new Date(),
         extractedConcepts: extractedConcepts,
         conceptImportance: conceptImportance,
         paperContent: paperText,
-        userUid: req.user.uid,
       });
 
-      await this.courseRepository.save(newCourse);
-
-      res.redirect(`/${newCourse.id}/assess`);
+      res.redirect(`/${courseId}/assess`);
     } catch (error) {
       if (error instanceof NotFoundException) {
         const html = TemplateHelper.renderTemplate('error-not-found.html', {
@@ -127,8 +150,9 @@ export class PaperController {
   }
 
   @Get('/:id/assess')
-  async getAssessmentPage(@Param('id') id: number, @Res() res: Response) {
-    const course = await this.courseRepository.findOneBy({ id });
+  @UseGuards(AuthGuard)
+  async getAssessmentPage(@Param('id') id: string, @Res() res: Response, @Req() req: Request & { user: { uid: string } }) {
+    const course = await this.courseRepository.findById(req.user.uid, id);
 
     if (!course) {
       return res.status(404).send('Course not found');
@@ -138,7 +162,7 @@ export class PaperController {
     if (course.extractedConcepts && course.extractedConcepts.length > 0) {
       conceptsHtml = course.extractedConcepts
         .map(
-          (concept) => `
+          (concept: string) => `
         <div class="form-control mb-4">
           <label class="label">
             <span class="label-text">${concept}:</span>
@@ -168,10 +192,12 @@ export class PaperController {
   }
 
   @Post('/:id/assess')
+  @UseGuards(AuthGuard)
   async submitAssessment(
-    @Param('id') id: number,
+    @Param('id') id: string,
     @Body() body: Record<string, string>,
     @Res() res: Response,
+    @Req() req: Request & { user: { uid: string } },
   ) {
     const ratings: Record<string, number> = {};
     for (const key in body) {
@@ -181,7 +207,7 @@ export class PaperController {
       }
     }
 
-    await this.courseService.generateSyllabus(id, ratings);
+    await this.courseService.generateSyllabus(req.user.uid, id, ratings);
 
     res.redirect(`/courses/${id}`);
   }

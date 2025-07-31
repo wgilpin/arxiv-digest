@@ -1,5 +1,6 @@
-import { Injectable, CanActivate, ExecutionContext, UnauthorizedException } from '@nestjs/common';
+import { Injectable, CanActivate, ExecutionContext, UnauthorizedException, ForbiddenException } from '@nestjs/common';
 import { AuthService } from './auth.service';
+import { Response } from 'express';
 
 interface AuthenticatedRequest {
   user?: any;
@@ -13,10 +14,12 @@ export class AuthGuard implements CanActivate {
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest<AuthenticatedRequest>();
+    const response = context.switchToHttp().getResponse<Response>();
     const token = this.extractTokenFromCookie(request) || this.extractTokenFromHeader(request);
 
     if (!token) {
-      throw new UnauthorizedException('No authentication token provided');
+      response.redirect('/auth/login');
+      throw new UnauthorizedException('Redirecting to login');
     }
 
     try {
@@ -24,7 +27,9 @@ export class AuthGuard implements CanActivate {
       request.user = decodedToken;
       return true;
     } catch (error) {
-      throw new UnauthorizedException('Invalid authentication token');
+      console.log("Auth: decode token error", error)
+      response.redirect('/auth/login');
+      throw new UnauthorizedException('Redirecting to login');
     }
   }
 

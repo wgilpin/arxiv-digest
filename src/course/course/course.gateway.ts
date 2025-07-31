@@ -34,33 +34,31 @@ export class CourseGateway
 
   @SubscribeMessage('joinCourse')
   handleJoinCourse(client: Socket, courseId: string): void {
-    const courseIdNum = parseInt(courseId, 10);
-    if (isNaN(courseIdNum)) {
+    if (!courseId || typeof courseId !== 'string') {
       this.logger.error(`Invalid course ID: ${courseId}`);
       return;
     }
-    this.joinCourseRoom(client, courseIdNum);
+    this.joinCourseRoom(client, courseId);
   }
 
   @SubscribeMessage('leaveCourse')
   handleLeaveCourse(client: Socket, courseId: string): void {
-    const courseIdNum = parseInt(courseId, 10);
-    if (isNaN(courseIdNum)) {
+    if (!courseId || typeof courseId !== 'string') {
       this.logger.error(`Invalid course ID: ${courseId}`);
       return;
     }
-    this.leaveCourseRoom(client, courseIdNum);
+    this.leaveCourseRoom(client, courseId);
   }
 
   // Join a course room for updates
-  joinCourseRoom(client: Socket, courseId: number) {
+  joinCourseRoom(client: Socket, courseId: string) {
     const roomName = `course-${courseId}`;
     client.join(roomName);
     this.logger.log(`Client ${client.id} joined course room: ${roomName}`);
   }
 
   // Leave a course room
-  leaveCourseRoom(client: Socket, courseId: number) {
+  leaveCourseRoom(client: Socket, courseId: string) {
     const roomName = `course-${courseId}`;
     client.leave(roomName);
     this.logger.log(`Client ${client.id} left course room: ${roomName}`);
@@ -68,8 +66,8 @@ export class CourseGateway
 
   // Emit lesson title generated event
   emitLessonTitlesGenerated(
-    courseId: number,
-    moduleId: number,
+    courseId: string,
+    moduleId: string,
     moduleTitle: string,
     lessonCount: number,
   ) {
@@ -88,10 +86,10 @@ export class CourseGateway
 
   // Emit lesson content generated event
   emitLessonContentGenerated(
-    courseId: number,
-    lessonId: number,
+    courseId: string,
+    lessonId: string,
     lessonTitle: string,
-    moduleId: number,
+    moduleId: string,
   ) {
     const roomName = `course-${courseId}`;
     this.server.to(roomName).emit('lessonContentGenerated', {
@@ -107,7 +105,7 @@ export class CourseGateway
   }
 
   // Emit course status update
-  emitCourseStatusUpdate(courseId: number, status: any) {
+  emitCourseStatusUpdate(courseId: string, status: any) {
     const roomName = `course-${courseId}`;
     this.server.to(roomName).emit('courseStatusUpdate', {
       courseId,
@@ -119,7 +117,7 @@ export class CourseGateway
 
   // Emit generation start event
   emitGenerationStarted(
-    courseId: number,
+    courseId: string,
     type: 'lesson-titles' | 'lesson-content',
     details: any,
   ) {
@@ -137,7 +135,7 @@ export class CourseGateway
 
   // Emit generation completed event
   emitGenerationCompleted(
-    courseId: number,
+    courseId: string,
     type: 'lesson-titles' | 'lesson-content',
     details: any,
   ) {

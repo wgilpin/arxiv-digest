@@ -1,17 +1,15 @@
 import { Module } from '@nestjs/common';
 import { CourseService } from './course/course.service';
-import { TypeOrmModule } from '@nestjs/typeorm';
-import { Course } from '../database/entities/course.entity';
-import { Module as CourseModuleEntity } from '../database/entities/module.entity';
-import { Lesson } from '../database/entities/lesson.entity';
-import { Progress } from '../database/entities/progress.entity';
+import { DataModule } from '../data/data.module';
 import { GenerationModule } from '../generation/generation.module';
+import { AuthModule } from '../auth/auth.module';
 import { CourseController } from './course/course.controller';
 import { CourseGateway } from './course/course.gateway';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Course, CourseModuleEntity, Lesson, Progress]),
+    AuthModule,
+    DataModule,
     GenerationModule,
   ],
   providers: [CourseService, CourseGateway],
