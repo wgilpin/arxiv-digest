@@ -159,12 +159,10 @@ export class FirebaseStorageService {
   }
 
   /**
-   * Generate storage paths for ArXiv files
+   * Generate storage paths for ArXiv files (only cache extracted text - PDFs/HTML always available on ArXiv)
    */
   generateArxivPaths(arxivId: string) {
     return {
-      pdf: `arxiv/pdfs/${arxivId}.pdf`,
-      html: `arxiv/html/${arxivId}.html`,
       text: `arxiv/text/${arxivId}.txt`
     };
   }

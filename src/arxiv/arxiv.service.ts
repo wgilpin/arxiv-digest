@@ -229,7 +229,7 @@ export class ArxivService {
       const paths = this.getArxivStoragePaths(arxivId);
 
       // Check if we have cached text in Firebase Storage
-      if (await this.storageService.isCacheValid(paths.text, 24 * 700)) { // 700 days cache
+      if (await this.storageService.isCacheValid(paths.text, 24 * 30)) { // 30 days cache for text
         try {
           const cachedText = await this.storageService.downloadText(paths.text);
           console.log(`Using cached text from Firebase Storage for ArXiv ID: ${arxivId}`);
@@ -242,57 +242,30 @@ export class ArxivService {
       let extractedText: string | null = null;
       let extractionSource = '';
 
-      // First, try to get HTML version if available
-      if (await this.storageService.isCacheValid(paths.html, 24 * 700)) { // 700 days cache for HTML
+      // Check if HTML version is available for download
+      const htmlAvailable = await this.checkHtmlAvailable(arxivId);
+      if (htmlAvailable) {
+        console.log(`HTML version available for ArXiv ID: ${arxivId}, downloading...`);
+        
+        // Download raw HTML (don't cache - always available on ArXiv)
+        let htmlUrl = `https://arxiv.org/html/${arxivId}v1`;
+        let response;
+        
         try {
-          const cachedHtml = await this.storageService.downloadText(paths.html);
-          console.log(`Using cached HTML from Firebase Storage for ArXiv ID: ${arxivId}`);
-          const $ = cheerio.load(cachedHtml);
-          extractedText = this.extractTextFromHtml($, arxivId);
-          extractionSource = 'cached-html';
+          response = await axios.get(htmlUrl, { timeout: 30000 });
         } catch (error) {
-          console.warn('Failed to read cached HTML from Firebase Storage:', error);
+          // Try without version suffix
+          htmlUrl = `https://arxiv.org/html/${arxivId}`;
+          response = await axios.get(htmlUrl, { timeout: 30000 });
         }
-      } else {
-        // Check if HTML version is available for download
-        const htmlAvailable = await this.checkHtmlAvailable(arxivId);
-        if (htmlAvailable) {
-          console.log(`HTML version available for ArXiv ID: ${arxivId}, downloading...`);
-          
-          // Download raw HTML and cache it
-          let htmlUrl = `https://arxiv.org/html/${arxivId}v1`;
-          let response;
-          
-          try {
-            response = await axios.get(htmlUrl, { timeout: 30000 });
-          } catch (error) {
-            // Try without version suffix
-            htmlUrl = `https://arxiv.org/html/${arxivId}`;
-            response = await axios.get(htmlUrl, { timeout: 30000 });
-          }
 
-          const rawHtml = response.data;
-          console.log(`Downloaded HTML content for ArXiv ID: ${arxivId}`);
-          
-          // Extract text from HTML
-          const $ = cheerio.load(rawHtml);
-          extractedText = this.extractTextFromHtml($, arxivId);
-          extractionSource = 'html';
-          
-          if (extractedText) {
-            // Cache the raw HTML content to Firebase Storage
-            try {
-              await this.storageService.uploadText(paths.html, rawHtml, {
-                arxivId: arxivId,
-                downloadedAt: new Date().toISOString(),
-                source: 'arxiv.org/html'
-              });
-              console.log(`Cached raw HTML to Firebase Storage for ArXiv ID: ${arxivId}`);
-            } catch (error) {
-              console.warn('Failed to cache raw HTML to Firebase Storage:', error);
-            }
-          }
-        }
+        const rawHtml = response.data;
+        console.log(`Downloaded HTML content for ArXiv ID: ${arxivId}`);
+        
+        // Extract text from HTML
+        const $ = cheerio.load(rawHtml);
+        extractedText = this.extractTextFromHtml($, arxivId);
+        extractionSource = 'html';
       }
 
       // If HTML extraction failed or wasn't available, fall back to PDF
@@ -362,25 +335,12 @@ Return the cleaned, structured text that would be suitable for further analysis.
   }
 
   /**
-   * Gets PDF buffer from cache or downloads from ArXiv
+   * Downloads PDF from ArXiv (no caching - PDFs are always available on ArXiv)
    * @param arxivId The ArXiv ID of the paper
    * @returns A promise that resolves to the PDF buffer
    */
   private async getPdfBuffer(arxivId: string): Promise<Buffer> {
-    const paths = this.getArxivStoragePaths(arxivId);
-
-    // Check if we have a cached PDF in Firebase Storage
-    if (await this.storageService.isCacheValid(paths.pdf, 24 * 365)) { // 365 days cache
-      try {
-        const cachedPdf = await this.storageService.downloadBuffer(paths.pdf);
-        console.log(`Using cached PDF from Firebase Storage for ArXiv ID: ${arxivId}`);
-        return cachedPdf;
-      } catch (error) {
-        console.warn('Failed to read cached PDF from Firebase Storage, will re-download:', error);
-      }
-    }
-
-    // Download PDF from ArXiv
+    // Download PDF from ArXiv (don't cache - it's always available)
     console.log(`Downloading PDF for ArXiv ID: ${arxivId}`);
     const pdfUrl = `https://arxiv.org/pdf/${arxivId}.pdf`;
     const response = await axios.get(pdfUrl, {
@@ -388,20 +348,6 @@ Return the cleaned, structured text that would be suitable for further analysis.
       timeout: 30000, // 30 second timeout
     });
 
-    const pdfBuffer = Buffer.from(response.data as ArrayBuffer);
-
-    // Cache the PDF to Firebase Storage
-    try {
-      await this.storageService.uploadBuffer(paths.pdf, pdfBuffer, {
-        arxivId: arxivId,
-        downloadedAt: new Date().toISOString(),
-        source: 'arxiv.org'
-      });
-      console.log(`Cached PDF to Firebase Storage for ArXiv ID: ${arxivId}`);
-    } catch (error) {
-      console.warn('Failed to cache PDF to Firebase Storage:', error);
-    }
-
-    return pdfBuffer;
+    return Buffer.from(response.data as ArrayBuffer);
   }
 }

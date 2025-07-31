@@ -376,8 +376,10 @@ export class CourseController {
       `;
     }
 
+    console.log('Debug - Course arxivId:', course.arxivId); // Debug log
     const html = TemplateHelper.renderTemplate('course-page.html', {
       paperTitle: course.paperTitle,
+      arxivId: course.arxivId || 'unknown',
       modulesHtml: modulesHtml,
     });
     res.send(html);
