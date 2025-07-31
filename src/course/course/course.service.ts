@@ -432,6 +432,8 @@ export class CourseService {
         `${courseId}-module-${moduleIndex}`,
       );
 
+      console.log(`Emitted lessonContentGenerated event for lesson: ${currentLessonId}`);
+
     } catch (error) {
       console.error(
         `Error preparing next lesson for course ${courseId}:`,

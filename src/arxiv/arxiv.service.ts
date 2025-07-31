@@ -304,7 +304,7 @@ export class ArxivService {
 
         // Upload PDF directly to Gemini for text extraction and cleaning
         const model = this.genAI.getGenerativeModel({
-          model: 'gemini-2.0-flash-exp',
+          model: 'gemini-2.0-flash',
         });
 
         const prompt = `
@@ -330,7 +330,7 @@ Return the cleaned, structured text that would be suitable for further analysis.
         ]);
 
         extractedText = result.response.text();
-        extractionSource = 'gemini-2.0-flash-exp';
+        extractionSource = 'gemini-2.0-flash';
       }
 
       // Cache the final extracted text to Firebase Storage

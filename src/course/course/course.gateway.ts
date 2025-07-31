@@ -92,16 +92,23 @@ export class CourseGateway
     moduleId: string,
   ) {
     const roomName = `course-${courseId}`;
-    this.server.to(roomName).emit('lessonContentGenerated', {
+    const eventData = {
       courseId,
       lessonId,
       lessonTitle,
       moduleId,
       timestamp: new Date().toISOString(),
-    });
+    };
+    
+    this.server.to(roomName).emit('lessonContentGenerated', eventData);
     this.logger.log(
-      `Emitted lessonContentGenerated for course ${courseId}, lesson ${lessonId}`,
+      `Emitted lessonContentGenerated for course ${courseId}, lesson ${lessonId} to room ${roomName}. Event data:`,
+      JSON.stringify(eventData),
     );
+    
+    // Also log connected clients in this room for debugging
+    const clients = this.server.sockets.adapter.rooms.get(roomName);
+    this.logger.log(`Room ${roomName} has ${clients ? clients.size : 0} connected clients`);
   }
 
   // Emit course status update
