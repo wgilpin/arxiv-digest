@@ -152,6 +152,7 @@ export class CourseController {
     };
   }
 
+
   @Get('/:id/modules-html')
   @UseGuards(AuthGuard)
   async getModulesHtml(@Param('id') id: string, @Res() res: Response, @Req() req: Request & { user: { uid: string } }) {
@@ -201,7 +202,7 @@ export class CourseController {
           }
 
           return `
-        <div class="collapse collapse-plus bg-base-200 mb-2">
+        <div class="collapse collapse-plus bg-base-200 mb-2" data-module-index="${moduleIndex}">
           <input type="checkbox" /> 
           <div class="collapse-title text-xl font-medium">
             ${moduleCompletedIcon}${module.title}
@@ -318,7 +319,7 @@ export class CourseController {
           }
 
           return `
-        <div class="collapse collapse-plus bg-base-200 mb-2">
+        <div class="collapse collapse-plus bg-base-200 mb-2" data-module-index="${moduleIndex}">
           <input type="checkbox" /> 
           <div class="collapse-title text-xl font-medium">
             ${moduleCompletedIcon}${module.title}

@@ -26,10 +26,12 @@ export class CourseGateway
 
   handleConnection(client: Socket, ..._: any[]) {
     this.logger.log(`Client connected: ${client.id}`);
+    this.logger.log(`Total connected clients: ${this.server.sockets.sockets.size}`);
   }
 
   handleDisconnect(client: Socket) {
     this.logger.log(`Client disconnected: ${client.id}`);
+    this.logger.log(`Total connected clients: ${this.server.sockets.sockets.size}`);
   }
 
   @SubscribeMessage('joinCourse')
@@ -55,6 +57,10 @@ export class CourseGateway
     const roomName = `course-${courseId}`;
     client.join(roomName);
     this.logger.log(`Client ${client.id} joined course room: ${roomName}`);
+    
+    // Log current room membership
+    const clients = this.server.sockets.adapter.rooms.get(roomName);
+    this.logger.log(`Room ${roomName} now has ${clients ? clients.size : 0} clients`);
   }
 
   // Leave a course room

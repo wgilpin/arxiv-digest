@@ -92,7 +92,7 @@
   <div class="container mx-auto p-4">
     <!-- Action buttons -->
     <div class="flex gap-4 justify-center mb-4">
-      <a href="/courses/{{courseId}}" class="btn btn-primary">Back to Course</a>
+      <a href="/courses/{{courseId}}" class="btn btn-primary" onclick="saveAccordionState(); return true;">Back to Course</a>
       <form id="completeForm" action="/courses/lessons/{{lessonId}}/complete" method="POST" style="display: inline;">
         <button type="submit" id="completeBtn" class="btn btn-success">
           <span id="completeText">Mark as Complete</span>
@@ -128,6 +128,16 @@
       completeText.classList.add('hidden');
       completeSpinner.classList.remove('hidden');
     });
+
+    // Function to save accordion state when navigating back to course
+    function saveAccordionState() {
+      const courseId = '{{courseId}}';
+      // Get the current accordion state from the referrer page if it exists
+      if (document.referrer && document.referrer.includes(`/courses/${courseId}`)) {
+        // Signal to the course page that we want to preserve state
+        sessionStorage.setItem(`preserveAccordionState_${courseId}`, 'true');
+      }
+    }
 
     // Ensure MathJax processes the content after the page loads
     window.MathJax = window.MathJax || {};
