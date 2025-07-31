@@ -2,86 +2,117 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import axios from 'axios';
 import * as xml2js from 'xml2js';
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import * as fs from 'fs';
-import * as path from 'path';
+import { FirebaseStorageService } from '../storage/storage.service';
+import * as cheerio from 'cheerio';
 
 @Injectable()
 export class ArxivService {
   private readonly ARXIV_API_URL = 'http://export.arxiv.org/api/query';
   private readonly genAI: GoogleGenerativeAI;
-  private readonly CACHE_DIR = './cache';
-  private readonly PDF_CACHE_DIR = path.join(this.CACHE_DIR, 'pdfs');
-  private readonly TEXT_CACHE_DIR = path.join(this.CACHE_DIR, 'text');
 
-  constructor() {
+  constructor(private readonly storageService: FirebaseStorageService) {
     this.genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
-    this.ensureCacheDirectories();
   }
 
   /**
-   * Ensures cache directories exist
+   * Gets storage paths for ArXiv files
    */
-  private ensureCacheDirectories(): void {
+  private getArxivStoragePaths(arxivId: string) {
+    return this.storageService.generateArxivPaths(arxivId);
+  }
+
+  /**
+   * Checks if an ArXiv paper has an HTML version available
+   */
+  private async checkHtmlAvailable(arxivId: string): Promise<boolean> {
     try {
-      if (!fs.existsSync(this.CACHE_DIR)) {
-        fs.mkdirSync(this.CACHE_DIR, { recursive: true });
-      }
-      if (!fs.existsSync(this.PDF_CACHE_DIR)) {
-        fs.mkdirSync(this.PDF_CACHE_DIR, { recursive: true });
-      }
-      if (!fs.existsSync(this.TEXT_CACHE_DIR)) {
-        fs.mkdirSync(this.TEXT_CACHE_DIR, { recursive: true });
-      }
+      // Try the most common pattern first: v1
+      const htmlUrl = `https://arxiv.org/html/${arxivId}v1`;
+      const response = await axios.head(htmlUrl, { timeout: 10000 });
+      return response.status === 200;
     } catch (error) {
-      console.warn('Failed to create cache directories:', error);
+      // If v1 doesn't work, try without version suffix
+      try {
+        const htmlUrl = `https://arxiv.org/html/${arxivId}`;
+        const response = await axios.head(htmlUrl, { timeout: 10000 });
+        return response.status === 200;
+      } catch (error) {
+        // No HTML version available
+        return false;
+      }
     }
   }
 
-  /**
-   * Gets the cache file path for a PDF
-   */
-  private getPdfCachePath(arxivId: string): string {
-    return path.join(this.PDF_CACHE_DIR, `${arxivId}.pdf`);
-  }
 
   /**
-   * Gets the cache file path for cleaned text
+   * Extracts and cleans text content from HTML using cheerio
    */
-  private getTextCachePath(arxivId: string): string {
-    return path.join(this.TEXT_CACHE_DIR, `${arxivId}.txt`);
-  }
-
-  /**
-   * Checks if a cached PDF exists and is recent (within 7 days)
-   */
-  private isCachedPdfValid(cachePath: string): boolean {
+  private extractTextFromHtml($: cheerio.Root, arxivId: string): string | null {
     try {
-      if (!fs.existsSync(cachePath)) {
-        return false;
+      // Extract content from the main article tag
+      const articleContent = $('article').first();
+      
+      if (articleContent.length === 0) {
+        console.warn(`No article tag found in HTML for ArXiv ID: ${arxivId}`);
+        return null;
       }
-      const stats = fs.statSync(cachePath);
-      const ageInDays =
-        (Date.now() - stats.mtime.getTime()) / (1000 * 60 * 60 * 24);
-      return ageInDays < 7; // Cache for 7 days
-    } catch {
-      return false;
-    }
-  }
 
-  /**
-   * Checks if cached text exists and is recent (within 7 days)
-   */
-  private isCachedTextValid(cachePath: string): boolean {
-    try {
-      if (!fs.existsSync(cachePath)) {
-        return false;
+      // Remove script tags, style tags, and other non-content elements
+      articleContent.find('script, style, nav, .ltx_navigation, .ltx_page_footer, .ltx_page_header').remove();
+      
+      // Extract text content while preserving structure
+      let extractedText = '';
+      
+      // Process different elements to maintain structure
+      articleContent.find('h1, h2, h3, h4, h5, h6').each((_, element) => {
+        const $el = $(element);
+        extractedText += `\n\n## ${$el.text().trim()}\n\n`;
+      });
+      
+      articleContent.find('p').each((_, element) => {
+        const $el = $(element);
+        const text = $el.text().trim();
+        if (text) {
+          extractedText += `${text}\n\n`;
+        }
+      });
+      
+      // Handle mathematical expressions
+      articleContent.find('.ltx_Math, .ltx_equation, .ltx_eqn_table').each((_, element) => {
+        const $el = $(element);
+        const mathText = $el.text().trim();
+        if (mathText) {
+          extractedText += `${mathText}\n\n`;
+        }
+      });
+      
+      // Handle lists
+      articleContent.find('ul, ol').each((_, element) => {
+        const $el = $(element);
+        $el.find('li').each((_, li) => {
+          const $li = $(li);
+          extractedText += `• ${$li.text().trim()}\n`;
+        });
+        extractedText += '\n';
+      });
+      
+      // If we didn't get much structured content, fall back to simple text extraction
+      if (extractedText.trim().length < 500) {
+        extractedText = articleContent.text();
       }
-      const stats = fs.statSync(cachePath);
-      const ageInDays =
-        (Date.now() - stats.mtime.getTime()) / (1000 * 60 * 60 * 24);
-      return ageInDays < 7; // Cache for 7 days
-    } catch {
-      return false;
+      
+      // Clean up extra whitespace
+      extractedText = extractedText
+        .replace(/\n\s*\n\s*\n/g, '\n\n') // Multiple newlines to double
+        .replace(/^\s+|\s+$/g, '') // Trim start/end
+        .trim();
+
+      console.log(`Extracted ${extractedText.length} characters from HTML for ArXiv ID: ${arxivId}`);
+      return extractedText;
+      
+    } catch (error) {
+      console.error(`Failed to extract text from HTML for ArXiv ID: ${arxivId}`, error);
+      return null;
     }
   }
 
@@ -185,37 +216,98 @@ export class ArxivService {
   }
 
   /**
-   * Retrieves the text of a paper given its ArXiv ID or URL by uploading the PDF directly to Gemini.
+   * Retrieves the text of a paper given its ArXiv ID or URL.
+   * Prefers HTML version when available, falls back to PDF extraction via Gemini.
    * Uses Gemini-2.0-flash for PDF text extraction and cleaning.
-   * Implements caching for both PDFs and cleaned text.
+   * Implements caching for both PDFs, HTML, and cleaned text.
    * @param arxivInput The ArXiv ID or URL of the paper.
    * @returns A promise that resolves to the paper's text.
    */
   async getPaperText(arxivInput: string): Promise<string> {
     const arxivId = this.extractArxivId(arxivInput);
     try {
-      const textCachePath = this.getTextCachePath(arxivId);
+      const paths = this.getArxivStoragePaths(arxivId);
 
-      // Check if we have cached text
-      if (this.isCachedTextValid(textCachePath)) {
+      // Check if we have cached text in Firebase Storage
+      if (await this.storageService.isCacheValid(paths.text, 24 * 700)) { // 700 days cache
         try {
-          const cachedText = fs.readFileSync(textCachePath, 'utf-8');
-          console.log(`Using cached text for ArXiv ID: ${arxivId}`);
+          const cachedText = await this.storageService.downloadText(paths.text);
+          console.log(`Using cached text from Firebase Storage for ArXiv ID: ${arxivId}`);
           return cachedText;
         } catch (error) {
-          console.warn('Failed to read cached text, will regenerate:', error);
+          console.warn('Failed to read cached text from Firebase Storage, will regenerate:', error);
         }
       }
 
-      // Get PDF (from cache or download)
-      const pdfBuffer = await this.getPdfBuffer(arxivId);
+      let extractedText: string | null = null;
+      let extractionSource = '';
 
-      // Upload PDF directly to Gemini for text extraction and cleaning
-      const model = this.genAI.getGenerativeModel({
-        model: 'gemini-2.0-flash-exp',
-      });
+      // First, try to get HTML version if available
+      if (await this.storageService.isCacheValid(paths.html, 24 * 700)) { // 700 days cache for HTML
+        try {
+          const cachedHtml = await this.storageService.downloadText(paths.html);
+          console.log(`Using cached HTML from Firebase Storage for ArXiv ID: ${arxivId}`);
+          const $ = cheerio.load(cachedHtml);
+          extractedText = this.extractTextFromHtml($, arxivId);
+          extractionSource = 'cached-html';
+        } catch (error) {
+          console.warn('Failed to read cached HTML from Firebase Storage:', error);
+        }
+      } else {
+        // Check if HTML version is available for download
+        const htmlAvailable = await this.checkHtmlAvailable(arxivId);
+        if (htmlAvailable) {
+          console.log(`HTML version available for ArXiv ID: ${arxivId}, downloading...`);
+          
+          // Download raw HTML and cache it
+          let htmlUrl = `https://arxiv.org/html/${arxivId}v1`;
+          let response;
+          
+          try {
+            response = await axios.get(htmlUrl, { timeout: 30000 });
+          } catch (error) {
+            // Try without version suffix
+            htmlUrl = `https://arxiv.org/html/${arxivId}`;
+            response = await axios.get(htmlUrl, { timeout: 30000 });
+          }
 
-      const prompt = `
+          const rawHtml = response.data;
+          console.log(`Downloaded HTML content for ArXiv ID: ${arxivId}`);
+          
+          // Extract text from HTML
+          const $ = cheerio.load(rawHtml);
+          extractedText = this.extractTextFromHtml($, arxivId);
+          extractionSource = 'html';
+          
+          if (extractedText) {
+            // Cache the raw HTML content to Firebase Storage
+            try {
+              await this.storageService.uploadText(paths.html, rawHtml, {
+                arxivId: arxivId,
+                downloadedAt: new Date().toISOString(),
+                source: 'arxiv.org/html'
+              });
+              console.log(`Cached raw HTML to Firebase Storage for ArXiv ID: ${arxivId}`);
+            } catch (error) {
+              console.warn('Failed to cache raw HTML to Firebase Storage:', error);
+            }
+          }
+        }
+      }
+
+      // If HTML extraction failed or wasn't available, fall back to PDF
+      if (!extractedText) {
+        console.log(`Falling back to PDF extraction for ArXiv ID: ${arxivId}`);
+        
+        // Get PDF (from cache or download)
+        const pdfBuffer = await this.getPdfBuffer(arxivId);
+
+        // Upload PDF directly to Gemini for text extraction and cleaning
+        const model = this.genAI.getGenerativeModel({
+          model: 'gemini-2.0-flash-exp',
+        });
+
+        const prompt = `
 Extract and clean the text from this academic paper PDF. 
 Please:
 - Extract all the text content from the PDF
@@ -227,30 +319,36 @@ Please:
 Return the cleaned, structured text that would be suitable for further analysis.
 `;
 
-      const result = await model.generateContent([
-        prompt,
-        {
-          inlineData: {
-            data: pdfBuffer.toString('base64'),
-            mimeType: 'application/pdf',
+        const result = await model.generateContent([
+          prompt,
+          {
+            inlineData: {
+              data: pdfBuffer.toString('base64'),
+              mimeType: 'application/pdf',
+            },
           },
-        },
-      ]);
+        ]);
 
-      const cleanedText = result.response.text();
+        extractedText = result.response.text();
+        extractionSource = 'gemini-2.0-flash-exp';
+      }
 
-      // Cache the cleaned text
-      if (cleanedText) {
+      // Cache the final extracted text to Firebase Storage
+      if (extractedText) {
         try {
-          fs.writeFileSync(textCachePath, cleanedText, 'utf-8');
-          console.log(`Cached cleaned text for ArXiv ID: ${arxivId}`);
+          await this.storageService.uploadText(paths.text, extractedText, {
+            arxivId: arxivId,
+            extractedAt: new Date().toISOString(),
+            source: extractionSource
+          });
+          console.log(`Cached cleaned text to Firebase Storage for ArXiv ID: ${arxivId} (source: ${extractionSource})`);
         } catch (error) {
-          console.warn('Failed to cache cleaned text:', error);
+          console.warn('Failed to cache cleaned text to Firebase Storage:', error);
         }
       }
 
       return (
-        cleanedText || `Unable to extract text from ArXiv paper ${arxivId}`
+        extractedText || `Unable to extract text from ArXiv paper ${arxivId}`
       );
     } catch (error) {
       console.error(
@@ -269,16 +367,16 @@ Return the cleaned, structured text that would be suitable for further analysis.
    * @returns A promise that resolves to the PDF buffer
    */
   private async getPdfBuffer(arxivId: string): Promise<Buffer> {
-    const pdfCachePath = this.getPdfCachePath(arxivId);
+    const paths = this.getArxivStoragePaths(arxivId);
 
-    // Check if we have a cached PDF
-    if (this.isCachedPdfValid(pdfCachePath)) {
+    // Check if we have a cached PDF in Firebase Storage
+    if (await this.storageService.isCacheValid(paths.pdf, 24 * 365)) { // 365 days cache
       try {
-        const cachedPdf = fs.readFileSync(pdfCachePath);
-        console.log(`Using cached PDF for ArXiv ID: ${arxivId}`);
+        const cachedPdf = await this.storageService.downloadBuffer(paths.pdf);
+        console.log(`Using cached PDF from Firebase Storage for ArXiv ID: ${arxivId}`);
         return cachedPdf;
       } catch (error) {
-        console.warn('Failed to read cached PDF, will re-download:', error);
+        console.warn('Failed to read cached PDF from Firebase Storage, will re-download:', error);
       }
     }
 
@@ -292,12 +390,16 @@ Return the cleaned, structured text that would be suitable for further analysis.
 
     const pdfBuffer = Buffer.from(response.data as ArrayBuffer);
 
-    // Cache the PDF
+    // Cache the PDF to Firebase Storage
     try {
-      fs.writeFileSync(pdfCachePath, pdfBuffer);
-      console.log(`Cached PDF for ArXiv ID: ${arxivId}`);
+      await this.storageService.uploadBuffer(paths.pdf, pdfBuffer, {
+        arxivId: arxivId,
+        downloadedAt: new Date().toISOString(),
+        source: 'arxiv.org'
+      });
+      console.log(`Cached PDF to Firebase Storage for ArXiv ID: ${arxivId}`);
     } catch (error) {
-      console.warn('Failed to cache PDF:', error);
+      console.warn('Failed to cache PDF to Firebase Storage:', error);
     }
 
     return pdfBuffer;

@@ -8,20 +8,33 @@ export class FirestoreService {
   private firestore: Firestore;
 
   constructor(private configService: ConfigService) {
-    const projectId = this.configService.get<string>('GOOGLE_CLOUD_PROJECT_ID');
+    const googleCloudProjectId = this.configService.get<string>('GOOGLE_CLOUD_PROJECT_ID');
+    const firebaseProjectId = this.configService.get<string>('FIREBASE_PROJECT_ID');
     const databaseId = this.configService.get<string>('FIRESTORE_DATABASE_ID', '(default)');
     
-    const firestoreConfig: any = {};
+    // Use FIREBASE_PROJECT_ID if GOOGLE_CLOUD_PROJECT_ID is not set
+    let projectId = googleCloudProjectId || firebaseProjectId;
+    
+    // Clean up any trailing slashes or whitespace
     if (projectId) {
-      firestoreConfig.projectId = projectId;
+      projectId = projectId.trim().replace(/\/$/, '');
     }
+    if (!projectId) {
+      this.logger.error('CRITICAL: No project ID found! Please set GOOGLE_CLOUD_PROJECT_ID or FIREBASE_PROJECT_ID in your .env file');
+      throw new Error('Missing required project ID for Firestore');
+    }
+    
+    const firestoreConfig: any = {
+      projectId: projectId, // Always include project ID
+    };
+    
     if (databaseId !== '(default)') {
       firestoreConfig.databaseId = databaseId;
     }
 
     this.firestore = new Firestore(firestoreConfig);
     
-    this.logger.log(`Firestore service initialized${projectId ? ` for project: ${projectId}` : ''}${databaseId !== '(default)' ? ` with database: ${databaseId}` : ''}`);
+    this.logger.log(`Firestore service initialized for project: ${projectId}${databaseId !== '(default)' ? ` with database: ${databaseId}` : ' with default database'}`);
   }
 
   getFirestore(): Firestore {
@@ -34,7 +47,16 @@ export class FirestoreService {
 
   async createCourse(userId: string, courseData: any) {
     const coursesCollection = this.getUserCoursesCollection(userId);
+    
+    this.logger.log(`Creating course for user: ${userId}`);
+    this.logger.log(`Collection path: users/${userId}/courses`);
+    this.logger.log(`Firestore settings:`, JSON.stringify(this.firestore.settings, null, 2));
+    
     const docRef = await coursesCollection.add(courseData);
+    
+    this.logger.log(`Course created with ID: ${docRef.id}`);
+    this.logger.log(`Full document path: users/${userId}/courses/${docRef.id}`);
+    
     return docRef.id;
   }
 

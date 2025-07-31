@@ -7,6 +7,7 @@ export class AuthService {
     if (!admin.apps.length) {
       admin.initializeApp({
         credential: admin.credential.applicationDefault(),
+        projectId: 'digest-370eb', // Explicitly set your project ID
       });
     }
   }
@@ -16,6 +17,10 @@ export class AuthService {
       const decodedToken = await admin.auth().verifyIdToken(idToken);
       return decodedToken;
     } catch (error) {
+      console.error('Error details:', {
+        code: error.code,
+        message: error.message
+      });
       throw new Error('Invalid token');
     }
   }
