@@ -17,11 +17,17 @@ export class AuthController {
 
   @Post('verify')
   async verifyToken(@Body('token') token: string, @Res() res: Response) {
+    console.log('Verify endpoint called, token length:', token?.length);
+    
     try {
+      console.log('Starting token verification...');
       const decodedToken = await this.authService.verifyIdToken(token);
+      console.log('Token verified successfully, user:', decodedToken.uid);
       
       // Create or update user in database
+      console.log('Finding or creating user...');
       const user = await this.userService.findOrCreateUser(decodedToken);
+      console.log('User found/created:', user.uid);
       
       res.cookie('authToken', token, {
         httpOnly: true,
@@ -29,6 +35,7 @@ export class AuthController {
         maxAge: 1209600000, // 14 days
       });
 
+      console.log('Sending success response');
       return res.status(HttpStatus.OK).json({
         success: true,
         user: {
@@ -40,6 +47,7 @@ export class AuthController {
       });
     } catch (error) {
       console.error('Token verification failed:', error);
+      console.log('Sending error response');
       return res.status(HttpStatus.UNAUTHORIZED).json({
         success: false,
         message: 'Invalid token',
@@ -75,6 +83,8 @@ export class AuthController {
       messagingSenderId: config.messagingSenderId ? 'SET' : 'MISSING',
       appId: config.appId ? 'SET' : 'MISSING'
     });
+    
+    console.log('Actual projectId value:', config.projectId);
     
     // Check if critical env vars are missing
     if (!config.apiKey || !config.authDomain || !config.projectId) {
