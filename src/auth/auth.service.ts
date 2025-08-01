@@ -5,10 +5,25 @@ import * as admin from 'firebase-admin';
 export class AuthService {
   constructor() {
     if (!admin.apps.length) {
-      admin.initializeApp({
-        credential: admin.credential.applicationDefault(),
-        projectId: 'digest-370eb', // Explicitly set your project ID
-      });
+      try {
+        if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+          // Use service account key from environment variable (production)
+          const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+          admin.initializeApp({
+            credential: admin.credential.cert(serviceAccount),
+            projectId: 'digest-370eb',
+          });
+        } else {
+          // Fallback to application default credentials (development)
+          admin.initializeApp({
+            credential: admin.credential.applicationDefault(),
+            projectId: 'digest-370eb',
+          });
+        }
+      } catch (error) {
+        console.error('Failed to initialize Firebase Admin:', error);
+        throw new Error('Firebase Admin initialization failed');
+      }
     }
   }
 
