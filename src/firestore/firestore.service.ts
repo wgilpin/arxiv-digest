@@ -32,6 +32,18 @@ export class FirestoreService {
       firestoreConfig.databaseId = databaseId;
     }
 
+    // Use service account credentials if available
+    if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+      try {
+        const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+        firestoreConfig.credentials = serviceAccount;
+        this.logger.log('Using service account credentials for Firestore');
+      } catch (error) {
+        this.logger.error('Failed to parse FIREBASE_SERVICE_ACCOUNT:', error);
+        throw new Error('Invalid FIREBASE_SERVICE_ACCOUNT JSON');
+      }
+    }
+
     this.firestore = new Firestore(firestoreConfig);
     
     this.logger.log(`Firestore service initialized for project: ${projectId}${databaseId !== '(default)' ? ` with database: ${databaseId}` : ' with default database'}`);
