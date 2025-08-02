@@ -1,18 +1,19 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import axios from 'axios';
 import * as xml2js from 'xml2js';
-import { GoogleGenerativeAI } from '@google/generative-ai';
 import { FirebaseStorageService } from '../storage/storage.service';
 import * as cheerio from 'cheerio';
+import { debugLog } from 'src/common/debug-logger';
+import { LLMService } from '../llm/llm.service';
 
 @Injectable()
 export class ArxivService {
   private readonly ARXIV_API_URL = 'http://export.arxiv.org/api/query';
-  private readonly genAI: GoogleGenerativeAI;
 
-  constructor(private readonly storageService: FirebaseStorageService) {
-    this.genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
-  }
+  constructor(
+    private readonly storageService: FirebaseStorageService,
+    private readonly llmService: LLMService,
+  ) {}
 
   /**
    * Gets storage paths for ArXiv files
@@ -107,7 +108,7 @@ export class ArxivService {
         .replace(/^\s+|\s+$/g, '') // Trim start/end
         .trim();
 
-      console.log(`Extracted ${extractedText.length} characters from HTML for ArXiv ID: ${arxivId}`);
+      debugLog(`Extracted ${extractedText.length} characters from HTML for ArXiv ID: ${arxivId}`);
       return extractedText;
       
     } catch (error) {
@@ -232,7 +233,7 @@ export class ArxivService {
       if (await this.storageService.isCacheValid(paths.text, 24 * 30)) { // 30 days cache for text
         try {
           const cachedText = await this.storageService.downloadText(paths.text);
-          console.log(`Using cached text from Firebase Storage for ArXiv ID: ${arxivId}`);
+          debugLog(`Using cached text from Firebase Storage for ArXiv ID: ${arxivId}`);
           return cachedText;
         } catch (error) {
           console.warn('Failed to read cached text from Firebase Storage, will regenerate:', error);
@@ -245,7 +246,7 @@ export class ArxivService {
       // Check if HTML version is available for download
       const htmlAvailable = await this.checkHtmlAvailable(arxivId);
       if (htmlAvailable) {
-        console.log(`HTML version available for ArXiv ID: ${arxivId}, downloading...`);
+        debugLog(`HTML version available for ArXiv ID: ${arxivId}, downloading...`);
         
         // Download raw HTML (don't cache - always available on ArXiv)
         let htmlUrl = `https://arxiv.org/html/${arxivId}v1`;
@@ -260,7 +261,7 @@ export class ArxivService {
         }
 
         const rawHtml = response.data;
-        console.log(`Downloaded HTML content for ArXiv ID: ${arxivId}`);
+        debugLog(`Downloaded HTML content for ArXiv ID: ${arxivId}`);
         
         // Extract text from HTML
         const $ = cheerio.load(rawHtml);
@@ -270,16 +271,12 @@ export class ArxivService {
 
       // If HTML extraction failed or wasn't available, fall back to PDF
       if (!extractedText) {
-        console.log(`Falling back to PDF extraction for ArXiv ID: ${arxivId}`);
+        debugLog(`Falling back to PDF extraction for ArXiv ID: ${arxivId}`);
         
         // Get PDF (from cache or download)
         const pdfBuffer = await this.getPdfBuffer(arxivId);
 
-        // Upload PDF directly to Gemini for text extraction and cleaning
-        const model = this.genAI.getGenerativeModel({
-          model: 'gemini-2.0-flash',
-        });
-
+        // Use LLM service for text extraction and cleaning
         const prompt = `
 Extract and clean the text from this academic paper PDF. 
 Please:
@@ -292,17 +289,15 @@ Please:
 Return the cleaned, structured text that would be suitable for further analysis.
 `;
 
-        const result = await model.generateContent([
+        const result = await this.llmService.extractPdf({
           prompt,
-          {
-            inlineData: {
-              data: pdfBuffer.toString('base64'),
-              mimeType: 'application/pdf',
-            },
+          fileUpload: {
+            data: pdfBuffer,
+            mimeType: 'application/pdf',
           },
-        ]);
+        });
 
-        extractedText = result.response.text();
+        extractedText = result.content;
         extractionSource = 'gemini-2.0-flash';
       }
 
@@ -314,7 +309,7 @@ Return the cleaned, structured text that would be suitable for further analysis.
             extractedAt: new Date().toISOString(),
             source: extractionSource
           });
-          console.log(`Cached cleaned text to Firebase Storage for ArXiv ID: ${arxivId} (source: ${extractionSource})`);
+          debugLog(`Cached cleaned text to Firebase Storage for ArXiv ID: ${arxivId} (source: ${extractionSource})`);
         } catch (error) {
           console.warn('Failed to cache cleaned text to Firebase Storage:', error);
         }
@@ -341,7 +336,7 @@ Return the cleaned, structured text that would be suitable for further analysis.
    */
   private async getPdfBuffer(arxivId: string): Promise<Buffer> {
     // Download PDF from ArXiv (don't cache - it's always available)
-    console.log(`Downloading PDF for ArXiv ID: ${arxivId}`);
+    debugLog(`Downloading PDF for ArXiv ID: ${arxivId}`);
     const pdfUrl = `https://arxiv.org/pdf/${arxivId}.pdf`;
     const response = await axios.get(pdfUrl, {
       responseType: 'arraybuffer',

@@ -1,31 +1,32 @@
 import { Injectable } from '@nestjs/common';
 import * as admin from 'firebase-admin';
+import { debugLog } from 'src/common/debug-logger';
 
 @Injectable()
 export class AuthService {
   constructor() {
     if (!admin.apps.length) {
       try {
-        console.log('Initializing Firebase Admin...');
-        console.log('FIREBASE_SERVICE_ACCOUNT present:', !!process.env.FIREBASE_SERVICE_ACCOUNT);
+        debugLog('Initializing Firebase Admin...');
+        debugLog('FIREBASE_SERVICE_ACCOUNT present:', !!process.env.FIREBASE_SERVICE_ACCOUNT);
         
         if (process.env.FIREBASE_SERVICE_ACCOUNT) {
           // Use service account key from environment variable (production)
           const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
-          console.log('Service account project_id:', serviceAccount.project_id);
+          debugLog('Service account project_id:', serviceAccount.project_id);
           
           admin.initializeApp({
             credential: admin.credential.cert(serviceAccount),
             projectId: serviceAccount.project_id, // Use project_id from service account
           });
-          console.log('Firebase Admin initialized with service account');
+          debugLog('Firebase Admin initialized with service account');
         } else {
           // Fallback to application default credentials (development)
           admin.initializeApp({
             credential: admin.credential.applicationDefault(),
             projectId: 'digest-370eb',
           });
-          console.log('Firebase Admin initialized with application default');
+          debugLog('Firebase Admin initialized with application default');
         }
       } catch (error) {
         console.error('Failed to initialize Firebase Admin:', error);

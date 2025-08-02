@@ -1,6 +1,7 @@
 import { Injectable, CanActivate, ExecutionContext, UnauthorizedException, ForbiddenException } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { Response } from 'express';
+import { debugLog } from 'src/common/debug-logger';
 
 interface AuthenticatedRequest {
   user?: any;
@@ -27,7 +28,7 @@ export class AuthGuard implements CanActivate {
       request.user = decodedToken;
       return true;
     } catch (error) {
-      console.log("Auth: decode token error", error)
+      debugLog("Auth: decode token error", error)
       response.redirect('/auth/login');
       throw new UnauthorizedException('Redirecting to login');
     }

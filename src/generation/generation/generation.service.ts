@@ -1,5 +1,7 @@
 import { Injectable } from '@nestjs/common';
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { debugLog } from 'src/common/debug-logger';
+import { LLMService } from '../../llm/llm.service';
+import { ModelSelectorService } from '../../llm/model-selector.service';
 
 // Wikipedia integration interfaces
 interface WikipediaSearchResult {
@@ -52,21 +54,21 @@ interface WikipediaApiContentResponse {
 
 @Injectable()
 export class GenerationService {
-  private readonly genAI: GoogleGenerativeAI;
   private readonly wikipediaCache: WikipediaCache = {};
   private readonly maxCacheSize = 100;
   private readonly cacheExpiryHours = 24;
   private tokenUsageByModel: Record<string, { inputTokens: number; outputTokens: number; totalTokens: number }> = {};
 
-  constructor() {
-    this.genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
-  }
+  constructor(
+    private readonly llmService: LLMService,
+    private readonly modelSelector: ModelSelectorService,
+  ) {}
 
   /**
-   * Tracks token usage from a Gemini API response for a specific model
+   * Tracks token usage from an LLM response for a specific model
    */
   private trackTokenUsage(result: any, modelName: string): void {
-    const usage = result.response.usageMetadata;
+    const usage = result.usage || result.response?.usageMetadata;
     if (usage) {
       if (!this.tokenUsageByModel[modelName]) {
         this.tokenUsageByModel[modelName] = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
@@ -150,6 +152,8 @@ export class GenerationService {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
 
+        debugLog(`Wikipedia API attempt ${attempt}/${maxRetries}:`, url);
+
         const response = await fetch(url, {
           signal: controller.signal,
           headers: {
@@ -163,6 +167,7 @@ export class GenerationService {
           throw new Error(`Wikipedia API error: ${response.status} ${response.statusText}`);
         }
 
+        debugLog(`Wikipedia API attempt ${attempt} succeeded`);
         return await response.json();
       } catch (error) {
         console.error(`Wikipedia API attempt ${attempt} failed:`, error);
@@ -335,7 +340,7 @@ export class GenerationService {
 
     // Apply quality thresholds
     if (bestResult.relevanceScore < 0.2) {
-      console.log(`No Wikipedia result met quality threshold for topic: ${topic}`);
+      debugLog(`No Wikipedia result met quality threshold for topic: ${topic}`);
       return null;
     }
 
@@ -360,35 +365,32 @@ export class GenerationService {
     try {
       // Basic quality checks first (fast, no LLM needed)
       if (content.length < 200) {
-        console.log(`Wikipedia content too short for topic: ${topic}`);
+        debugLog(`Wikipedia content too short for topic: ${topic}`);
         return false;
       }
 
       // Check for stub articles
       if (content.toLowerCase().includes('is a stub') || content.toLowerCase().includes('stub article')) {
-        console.log(`Wikipedia article is a stub for topic: ${topic}`);
+        debugLog(`Wikipedia article is a stub for topic: ${topic}`);
         return false;
       }
 
       // Check for disambiguation pages
       if (content.toLowerCase().includes('may refer to:') || content.toLowerCase().includes('disambiguation')) {
-        console.log(`Wikipedia article is disambiguation page for topic: ${topic}`);
+        debugLog(`Wikipedia article is disambiguation page for topic: ${topic}`);
         return false;
       }
 
-      // LLM validation for relevance
-      const model = this.genAI.getGenerativeModel({
-        model: 'gemini-2.5-flash',
-      });
-
+      // LLM validation for relevance - be more lenient for academic concepts
       const validationPrompt = `
-Evaluate whether the following Wikipedia article content is relevant and suitable for creating a lesson about the topic: "${topic}" within the broader concept of "${concept}".
+Evaluate whether the following Wikipedia article content is relevant for creating a lesson about the topic: "${topic}" within the broader concept of "${concept}".
 
-Consider:
-- Does the content directly address the topic?
-- Is the content at an appropriate technical level for academic learning?
-- Does the content contain sufficient detail for a 2-3 minute lesson?
-- Is the content factual and educational (not opinion-based)?
+The content should be considered RELEVANT if it:
+- Contains any information related to the topic or concept
+- Has educational value for understanding the broader domain
+- Contains factual, academic content (even if not perfectly focused)
+
+Be LENIENT - articles about related concepts, foundations, or applications should be considered relevant.
 
 Article Content (first 500 words):
 ${content.slice(0, 2000)}
@@ -396,16 +398,18 @@ ${content.slice(0, 2000)}
 Respond with only "RELEVANT" or "NOT_RELEVANT" followed by a brief reason.
 `;
 
-      const result = await model.generateContent(validationPrompt);
+      const result = await this.llmService.generateLesson({
+        prompt: validationPrompt,
+      });
       this.trackTokenUsage(result, 'gemini-2.5-flash');
-      const response = result.response.text().trim();
+      const response = result.content.trim();
 
       const isRelevant = response.toUpperCase().startsWith('RELEVANT');
       
       if (!isRelevant) {
-        console.log(`LLM validation failed for topic: ${topic}. Response: ${response}`);
+        debugLog(`LLM validation failed for topic: ${topic}. Response: ${response}`);
       }
-      console.log(`LLM validation succeeded for topic: ${topic}`);
+      debugLog(`LLM validation succeeded for topic: ${topic}`);
       return isRelevant;
     } catch (error) {
       console.error(`Error validating Wikipedia content for topic: ${topic}`, error);
@@ -429,13 +433,6 @@ Respond with only "RELEVANT" or "NOT_RELEVANT" followed by a brief reason.
    */
   private async generateSearchTerms(concept: string): Promise<string[]> {
     try {
-      const model = this.genAI.getGenerativeModel({
-        model: 'gemini-2.5-flash',
-        generationConfig: {
-          responseMimeType: 'application/json',
-        },
-      });
-
       const prompt = `
 Generate 3-4 alternative search terms for finding the Wikipedia article about: "${concept}"
 
@@ -456,9 +453,11 @@ Example for "In-Context Learning":
 Concept: ${concept}
 `;
 
-      const result = await model.generateContent(prompt);
+      const result = await this.llmService.generateLessonTitles({
+        prompt,
+      });
       this.trackTokenUsage(result, 'gemini-2.5-flash');
-      const response = result.response.text();
+      const response = result.content;
 
       try {
         // Clean and parse JSON response
@@ -500,49 +499,41 @@ Concept: ${concept}
     // Check cache first
     const cached = this.getCachedWikipediaContent(cacheKey);
     if (cached) {
-      console.log(`Cache hit for Wikipedia topic: ${query}`);
+      debugLog(`Cache hit for Wikipedia topic: ${query}`);
       return cached;
     }
 
     try {
-      console.log(`Searching Wikipedia for topic: ${query}`);
       
       // Generate alternative search terms
       const searchTerms = await this.generateSearchTerms(query);
-      console.log(`Generated search terms: ${searchTerms.join(', ')}`);
       
       // Try each search term until we find a good result
       for (const searchTerm of searchTerms) {
-        console.log(`Trying search term: "${searchTerm}"`);
         
         // Search for articles with this term
         const searchResults = await this.searchWikipediaArticles(searchTerm);
         if (searchResults.length === 0) {
-          console.log(`No Wikipedia results found for search term: ${searchTerm}`);
-          continue; // Try next search term
+            continue; // Try next search term
         }
 
         // Rank and select best result for this search term
         const bestResult = this.rankAndSelectBestResult(searchResults, searchTerm, concept);
         if (!bestResult) {
-          console.log(`No suitable Wikipedia result found for search term: ${searchTerm}`);
-          continue; // Try next search term
+            continue; // Try next search term
         }
 
-        console.log(`Selected Wikipedia article: "${bestResult.title}" (score: ${bestResult.relevanceScore.toFixed(2)}) for search term: "${searchTerm}"`);
 
         // Get full article content
         const articleContent = await this.getWikipediaArticleContent(bestResult.title);
         if (!articleContent) {
-          console.log(`Failed to fetch Wikipedia content for: ${bestResult.title}`);
-          continue; // Try next search term
+            continue; // Try next search term
         }
 
         // Validate content quality
         const isValid = await this.validateWikipediaContent(articleContent.content, query, concept);
         if (!isValid) {
-          console.log(`Wikipedia content validation failed for: ${bestResult.title}, trying next search term`);
-          continue; // Try next search term
+            continue; // Try next search term
         }
 
         // Success! Create result object
@@ -557,12 +548,10 @@ Concept: ${concept}
         // Cache the result
         this.setCachedWikipediaContent(cacheKey, result);
 
-        console.log(`Successfully processed Wikipedia article for topic: ${query} using search term: "${searchTerm}"`);
         return result;
       }
       
       // If we get here, none of the search terms worked
-      console.log(`All search terms failed for topic: ${query}`);
       return null;
 
     } catch (error) {
@@ -581,15 +570,15 @@ Concept: ${concept}
   ): Promise<{ title: string; content: string }> {
     // Always use the broader concept for Wikipedia search
     const searchQuery = concept;
-    console.log(`Generating summary lesson for peripheral concept: "${concept}"`);
+    debugLog(`Generating summary lesson for peripheral concept: "${concept}"`);
 
     try {
       // Step 1: Try Wikipedia first
-      console.log('Attempting Wikipedia content generation for summary lesson...');
+      debugLog('Attempting Wikipedia content generation for summary lesson...');
       const wikipediaResult = await this.searchWikipedia(searchQuery, concept);
       
       if (wikipediaResult) {
-        console.log(`Using Wikipedia article for summary: "${wikipediaResult.title}"`);
+        debugLog(`Using Wikipedia article for summary: "${wikipediaResult.title}"`);
         const lesson = await this.summarizeWikipediaForSummary(
           wikipediaResult.content,
           concept,
@@ -597,22 +586,22 @@ Concept: ${concept}
           wikipediaResult.url,
           paperContent
         );
-        console.log(`Successfully generated summary lesson from Wikipedia for: ${concept}`);
+        debugLog(`Successfully generated summary lesson from Wikipedia for: ${concept}`);
         return lesson;
       }
 
-      console.log('Wikipedia content not suitable for summary, falling back to LLM generation...');
+      debugLog('Wikipedia content not suitable for summary, falling back to LLM generation...');
 
     } catch (error) {
       console.error('Error with Wikipedia content generation for summary:', error);
-      console.log('Falling back to LLM generation for summary due to Wikipedia error...');
+      debugLog('Falling back to LLM generation for summary due to Wikipedia error...');
     }
 
     // Step 2: Fallback to LLM-based summary generation
-    console.log('Using LLM-based summary generation as fallback...');
+    debugLog('Using LLM-based summary generation as fallback...');
     try {
       const fallbackLesson = await this.generateLLMSummaryLesson(concept, knowledgeLevel, paperContent);
-      console.log(`Successfully generated summary lesson using LLM fallback for: ${concept}`);
+      debugLog(`Successfully generated summary lesson using LLM fallback for: ${concept}`);
       return fallbackLesson;
     } catch (error) {
       console.error('Error with LLM fallback summary generation:', error);
@@ -636,10 +625,6 @@ Concept: ${concept}
     paperContent?: string
   ): Promise<{ title: string; content: string }> {
     try {
-      const model = this.genAI.getGenerativeModel({
-        model: 'gemini-2.5-flash',
-      });
-
       const paperContextSection = paperContent ? `
 
 CRITICAL CONTEXT - Paper-Specific Focus:
@@ -672,9 +657,11 @@ Wikipedia Article Content:
 ${articleContent.slice(0, 5000)}
 `;
 
-      const result = await model.generateContent(prompt);
+      const result = await this.llmService.generateLesson({
+        prompt,
+      });
       this.trackTokenUsage(result, 'gemini-2.5-flash');
-      const response = result.response.text();
+      const response = result.content;
 
       // Parse the structured response
       const titleMatch = response.match(/TITLE:\s*(.+)/i);
@@ -713,9 +700,6 @@ ${articleContent.slice(0, 5000)}
     paperContent?: string
   ): Promise<{ title: string; content: string }> {
     try {
-      const model = this.genAI.getGenerativeModel({
-        model: 'gemini-2.5-flash',
-      });
 
       const paperContextSection = paperContent ? `
 
@@ -748,9 +732,11 @@ CONTENT:
 Use proper Markdown formatting but keep it concise since this is a peripheral concept.
 `;
 
-      const result = await model.generateContent(prompt);
+      const result = await this.llmService.generateLesson({
+        prompt,
+      });
       this.trackTokenUsage(result, 'gemini-2.5-flash');
-      const response = result.response.text();
+      const response = result.content;
 
       // Parse the structured response
       const titleMatch = response.match(/TITLE:\s*(.+)/i);
@@ -787,9 +773,6 @@ Use proper Markdown formatting but keep it concise since this is a peripheral co
     paperContent?: string
   ): Promise<{ title: string; content: string }> {
     try {
-      const model = this.genAI.getGenerativeModel({
-        model: 'gemini-2.5-flash',
-      });
 
       const paperContextSection = paperContent ? `
 
@@ -835,9 +818,11 @@ Wikipedia Article Content:
 ${articleContent.slice(0, 8000)} // Use more content for better context
 `;
 
-      const result = await model.generateContent(prompt);
+      const result = await this.llmService.generateLesson({
+        prompt,
+      });
       this.trackTokenUsage(result, 'gemini-2.5-flash');
-      const response = result.response.text();
+      const response = result.content;
 
       // Parse the structured response
       const titleMatch = response.match(/TITLE:\s*(.+)/i);
@@ -884,16 +869,16 @@ ${articleContent.slice(0, 8000)} // Use more content for better context
   ): Promise<{ title: string; content: string }> {
     // Always use the broader concept for Wikipedia search, not the specific lesson topic
     const searchQuery = concept;
-    console.log(`Generating lesson for topic: "${topic || concept}" within concept: "${concept}"`);
-    console.log(`Using Wikipedia search query: "${searchQuery}"`);
+    debugLog(`[LESSON GEN START] Generating lesson for topic: "${topic || concept}" within concept: "${concept}"`);
+    debugLog(`[LESSON GEN START] Using Wikipedia search query: "${searchQuery}"`);
+    debugLog(`[LESSON GEN START] Stack trace:`, new Error().stack?.split('\n').slice(1, 4).join('\n'));
 
     try {
       // Step 1: Try Wikipedia
-      console.log('Attempting Wikipedia content generation...');
       const wikipediaResult = await this.searchWikipedia(searchQuery, concept);
       
       if (wikipediaResult) {
-        console.log(`Using Wikipedia article: "${wikipediaResult.title}"`);
+        debugLog(`Using Wikipedia article: "${wikipediaResult.title}"`);
         const lesson = await this.summarizeWikipediaArticle(
           wikipediaResult.content,
           topic || concept, // Use the specific topic for lesson content, not the search query
@@ -902,19 +887,19 @@ ${articleContent.slice(0, 8000)} // Use more content for better context
           wikipediaResult.url,
           paperContent
         );
-        console.log(`Successfully generated lesson from Wikipedia for: ${searchQuery}`);
+        debugLog(`Successfully generated lesson from Wikipedia for: ${searchQuery}`);
         return lesson;
       }
 
-      console.log('Wikipedia content not suitable, falling back to LLM generation...');
+      debugLog('Wikipedia content not suitable, falling back to LLM generation...');
 
     } catch (error) {
       console.error('Error with Wikipedia content generation:', error);
-      console.log('Falling back to LLM generation due to Wikipedia error...');
+      debugLog('Falling back to LLM generation due to Wikipedia error...');
     }
 
     // Step 2: Fallback to existing LLM generation
-    console.log('Using LLM-based content generation as fallback...');
+    debugLog('Using LLM-based content generation as fallback...');
     try {
       const fallbackLesson = await this.generateLessonContent(
         concept,
@@ -923,7 +908,7 @@ ${articleContent.slice(0, 8000)} // Use more content for better context
         knowledgeLevel,
         paperContent
       );
-      console.log(`Successfully generated lesson using LLM fallback for: ${searchQuery}`);
+      debugLog(`Successfully generated lesson using LLM fallback for: ${searchQuery}`);
       return fallbackLesson;
     } catch (error) {
       console.error('Error with LLM fallback generation:', error);
@@ -943,12 +928,6 @@ ${articleContent.slice(0, 8000)} // Use more content for better context
    */
   async extractConceptsWithImportance(paperText: string): Promise<ConceptWithImportance[]> {
     try {
-      const model = this.genAI.getGenerativeModel({
-        model: 'gemini-2.5-flash',
-        generationConfig: {
-          responseMimeType: 'application/json',
-        },
-      });
 
       const prompt = `
 Analyze this academic paper and extract 8-12 key technical concepts that would be essential for understanding this paper. 
@@ -988,9 +967,11 @@ Paper text:
 ${paperText.slice(0, 30000)} // Limit to avoid token limits
 `;
 
-      const result = await model.generateContent(prompt);
+      const result = await this.llmService.extractConcepts({
+        prompt,
+      });
       this.trackTokenUsage(result, 'gemini-2.5-flash');
-      const response = result.response.text();
+      const response = result.content;
 
       // Try to parse JSON response (handle markdown code blocks)
       try {
@@ -1089,12 +1070,6 @@ ${paperText.slice(0, 30000)} // Limit to avoid token limits
    */
   async generateLessonTopics(concept: string): Promise<string[]> {
     try {
-      const model = this.genAI.getGenerativeModel({
-        model: 'gemini-2.5-flash',
-        generationConfig: {
-          responseMimeType: 'application/json',
-        },
-      });
 
       const prompt = `
 Break down the concept "${concept}" into 3-5 specific lesson topics that can each be taught in 2-3 minutes.
@@ -1116,9 +1091,11 @@ Example format:
 Concept: ${concept}
 `;
 
-      const result = await model.generateContent(prompt);
+      const result = await this.llmService.generateLessonTitles({
+        prompt,
+      });
       this.trackTokenUsage(result, 'gemini-2.5-flash');
-      const response = result.response.text();
+      const response = result.content;
 
       try {
         // Attempt to extract JSON array from the response
@@ -1195,14 +1172,14 @@ Concept: ${concept}
                   cleanedString = cleanupStrategies[j](cleanedString);
                 }
                 
-                console.log(`Trying cleanup strategy ${i + 1}:`, cleanedString);
+                debugLog(`Trying cleanup strategy ${i + 1}:`, cleanedString);
                 const topics = JSON.parse(cleanedString) as unknown[];
                 if (Array.isArray(topics) && topics.length > 0) {
-                  console.log('Successfully parsed with strategy', i + 1);
+                  debugLog('Successfully parsed with strategy', i + 1);
                   return (topics as string[]).slice(0, 5);
                 }
               } catch (e2) {
-                console.log(`Cleanup strategy ${i + 1} failed:`, (e2 as Error).message);
+                debugLog(`Cleanup strategy ${i + 1} failed:`, (e2 as Error).message);
               }
             }
             
@@ -1399,17 +1376,15 @@ Make the content engaging, informative, and approximately 400-600 words.
     paperContent?: string,
   ): Promise<{ title: string; content: string }> {
     try {
-      const model = this.genAI.getGenerativeModel({
-        model: 'gemini-2.5-flash',
-      });
-
       const prompt = topic
         ? this.generateFocusedLessonPrompt(concept, topic, previousLessons, knowledgeLevel, paperContent)
         : this.generateComprehensiveLessonPrompt(concept, previousLessons, knowledgeLevel, paperContent);
 
-      const result = await model.generateContent(prompt);
+      const result = await this.llmService.generateLesson({
+        prompt,
+      });
       this.trackTokenUsage(result, 'gemini-2.5-flash');
-      const response = result.response.text();
+      const response = result.content;
 
       // Parse the structured response
       const titleMatch = response.match(/TITLE:\s*(.+)/i);

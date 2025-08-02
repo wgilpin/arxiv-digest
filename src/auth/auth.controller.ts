@@ -7,6 +7,7 @@ interface AuthenticatedRequest extends Request {
 import { AuthService } from './auth.service';
 import { AuthGuard } from './auth.guard';
 import { UserService } from './user.service';
+import { debugLog } from 'src/common/debug-logger';
 
 @Controller('auth')
 export class AuthController {
@@ -17,17 +18,17 @@ export class AuthController {
 
   @Post('verify')
   async verifyToken(@Body('token') token: string, @Res() res: Response) {
-    console.log('Verify endpoint called, token length:', token?.length);
+    debugLog('Verify endpoint called, token length:', token?.length);
     
     try {
-      console.log('Starting token verification...');
+      debugLog('Starting token verification...');
       const decodedToken = await this.authService.verifyIdToken(token);
-      console.log('Token verified successfully, user:', decodedToken.uid);
+      debugLog('Token verified successfully, user:', decodedToken.uid);
       
       // Create or update user in database
-      console.log('Finding or creating user...');
+      debugLog('Finding or creating user...');
       const user = await this.userService.findOrCreateUser(decodedToken);
-      console.log('User found/created:', user.uid);
+      debugLog('User found/created:', user.uid);
       
       res.cookie('authToken', token, {
         httpOnly: true,
@@ -35,7 +36,7 @@ export class AuthController {
         maxAge: 1209600000, // 14 days
       });
 
-      console.log('Sending success response');
+      debugLog('Sending success response');
       return res.status(HttpStatus.OK).json({
         success: true,
         user: {
@@ -47,7 +48,7 @@ export class AuthController {
       });
     } catch (error) {
       console.error('Token verification failed:', error);
-      console.log('Sending error response');
+      debugLog('Sending error response');
       return res.status(HttpStatus.UNAUTHORIZED).json({
         success: false,
         message: 'Invalid token',
@@ -56,7 +57,7 @@ export class AuthController {
   }
 
   @Post('logout')
-  async logout(@Res() res: Response) {
+  logout(@Res() res: Response) {
     res.clearCookie('authToken');
     return res.status(HttpStatus.OK).json({
       success: true,
@@ -75,7 +76,7 @@ export class AuthController {
       appId: process.env.FIREBASE_APP_ID || ''
     };
     
-    console.log('Firebase config being returned:', {
+    debugLog('Firebase config being returned:', {
       apiKey: config.apiKey ? 'SET' : 'MISSING',
       authDomain: config.authDomain ? 'SET' : 'MISSING',
       projectId: config.projectId ? 'SET' : 'MISSING',
@@ -84,7 +85,7 @@ export class AuthController {
       appId: config.appId ? 'SET' : 'MISSING'
     });
     
-    console.log('Actual projectId value:', config.projectId);
+    debugLog('Actual projectId value:', config.projectId);
     
     // Check if critical env vars are missing
     if (!config.apiKey || !config.authDomain || !config.projectId) {

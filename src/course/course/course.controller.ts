@@ -5,12 +5,13 @@ import { AuthGuard } from '../../auth/auth.guard';
 import { CourseService } from './course.service';
 import { Course, Lesson, Module } from '../../firestore/interfaces/firestore.interfaces';
 import { TemplateHelper } from '../../templates/template-helper';
+import { debugLog } from 'src/common/debug-logger';
 const { marked } = require('marked');
 
 @Controller('courses')
 export class CourseController {
   constructor(private readonly courseService: CourseService) {
-    console.log('CourseController initialized');
+    debugLog('CourseController initialized');
   }
 
   /**
@@ -376,7 +377,7 @@ export class CourseController {
       `;
     }
 
-    console.log('Debug - Course arxivId:', course.arxivId); // Debug log
+    debugLog('Debug - Course arxivId:', course.arxivId); // Debug log
     const html = TemplateHelper.renderTemplate('course-page.html', {
       paperTitle: course.paperTitle,
       arxivId: course.arxivId || 'unknown',
@@ -421,19 +422,24 @@ export class CourseController {
     const nextLessonNeedsContent = course && navigation.next && !navigation.next.hasContent;
     
     if (currentLessonNeedsContent && isFirstLesson) {
-      console.log(`User accessed first lesson ${courseId}/${moduleIdx}/${lessonIdx} (${lesson.title}) with no content, triggering generation`);
+      debugLog(`User accessed first lesson ${courseId}/${moduleIdx}/${lessonIdx} (${lesson.title}) with no content, triggering generation`);
       
       setImmediate(() => {
         this.courseService.prepareNextLesson(req.user.uid, courseId).catch((error) => {
           console.error('Background lesson preparation failed:', error);
         });
       });
-    } else if (nextLessonNeedsContent) {
-      console.log(`User accessed lesson ${courseId}/${moduleIdx}/${lessonIdx} (${lesson.title}), next lesson has no content, triggering background generation`);
+    } else if (nextLessonNeedsContent && navigation.next) {
+      debugLog(`User accessed lesson ${courseId}/${moduleIdx}/${lessonIdx} (${lesson.title}), next lesson has no content, triggering background generation for specific next lesson`);
       
       setImmediate(() => {
-        this.courseService.prepareNextLesson(req.user.uid, courseId).catch((error) => {
-          console.error('Background lesson preparation failed:', error);
+        this.courseService.prepareSpecificLesson(
+          req.user.uid, 
+          courseId, 
+          navigation.next.moduleIndex, 
+          navigation.next.lessonIndex
+        ).catch((error) => {
+          console.error('Background specific lesson preparation failed:', error);
         });
       });
     } else if (course && !navigation.next) {
@@ -445,10 +451,19 @@ export class CourseController {
 
     // Check if lesson has content
     if (!lesson.content || lesson.content === '') {
+      debugLog(`User clicked on lesson ${courseId}/${moduleIdx}/${lessonIdx} (${lesson.title}) that needs content, triggering specific generation`);
+      
+      // Trigger generation of this specific lesson
+      setImmediate(() => {
+        this.courseService.prepareSpecificLesson(req.user.uid, courseId, moduleIdx, lessonIdx).catch((error) => {
+          console.error('Specific lesson preparation failed:', error);
+        });
+      });
+
       const html = TemplateHelper.renderTemplate('lesson-loading.html', {
         lessonTitle: lesson.title,
         courseId: courseId,
-        lessonId: `${courseId}-${moduleIdx}-${lessonIdx}`,
+        lessonId: `${courseId}-module-${moduleIdx}-lesson-${lessonIdx}`,
       });
       return res.send(html);
     }
@@ -510,7 +525,7 @@ export class CourseController {
       
       // Only trigger generation if the next lesson doesn't have content yet
       if (course && navigation.next && !navigation.next.hasContent) {
-        console.log(`User completed lesson ${courseId}/${moduleIdx}/${lessonIdx}, next lesson has no content, triggering background generation`);
+        debugLog(`User completed lesson ${courseId}/${moduleIdx}/${lessonIdx}, next lesson has no content, triggering background generation`);
         
         setImmediate(() => {
           this.courseService.prepareNextLesson(req.user.uid, courseId).catch((error) => {
@@ -534,11 +549,11 @@ export class CourseController {
   @Delete('/:id')
   @UseGuards(AuthGuard)
   async deleteCourse(@Param('id') id: string, @Res() res: Response, @Req() req: Request & { user: { uid: string } }) {
-    console.log(`DELETE request received for course ID: ${id}`);
+    debugLog(`DELETE request received for course ID: ${id}`);
     
     try {
       await this.courseService.deleteCourse(req.user.uid, id);
-      console.log(`Successfully deleted course ${id}`);
+      debugLog(`Successfully deleted course ${id}`);
       res.status(200).json({ message: 'Course deleted successfully' });
     } catch (error) {
       console.error('Error deleting course:', error);

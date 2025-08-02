@@ -33,8 +33,12 @@
     let socket = null;
     let timeoutTimer = null;
     const maxWaitTime = 120000; // 2 minutes max
-    const lessonId = {{lessonId}};
-    const courseId = {{courseId}};
+    const lessonId = "{{lessonId}}";
+    const courseId = "{{courseId}}";
+    
+    console.log('Lesson loading page initialized with:');
+    console.log('  - lessonId:', lessonId);
+    console.log('  - courseId:', courseId);
     
     function initializeWebSocket() {
       socket = io();
@@ -57,11 +61,17 @@
       // Listen for lesson content generated
       socket.on('lessonContentGenerated', (data) => {
         console.log('Lesson content generated:', data);
+        console.log('Expected lessonId:', lessonId);
+        console.log('Received lessonId:', data.lessonId);
+        console.log('IDs match:', data.lessonId === lessonId);
+        
         if (data.lessonId === lessonId) {
           console.log('Our lesson is ready! Reloading page...');
           clearTimeout(timeoutTimer);
           // Lesson is ready, reload the page to show content
           window.location.reload();
+        } else {
+          console.log('This event is for a different lesson, ignoring');
         }
       });
 
