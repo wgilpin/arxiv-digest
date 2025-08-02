@@ -17,26 +17,37 @@ export class AuthController {
   ) {}
 
   @Post('verify')
-  async verifyToken(@Body('token') token: string, @Res() res: Response) {
-    debugLog('Verify endpoint called, token length:', token?.length);
-    
+  async verifyToken(@Body() body: { token: string; refreshToken?: string }, @Res() res: Response) {
     try {
-      debugLog('Starting token verification...');
+      const { token, refreshToken } = body || {};
+      
+      if (!token) {
+        return res.status(HttpStatus.BAD_REQUEST).json({
+          success: false,
+          message: 'Token is required',
+        });
+      }
+      
       const decodedToken = await this.authService.verifyIdToken(token);
-      debugLog('Token verified successfully, user:', decodedToken.uid);
       
       // Create or update user in database
-      debugLog('Finding or creating user...');
       const user = await this.userService.findOrCreateUser(decodedToken);
-      debugLog('User found/created:', user.uid);
       
+      // Set both ID token and refresh token cookies
       res.cookie('authToken', token, {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
-        maxAge: 1209600000, // 14 days
+        maxAge: 2592000000, // 30 days (30 * 24 * 60 * 60 * 1000)
       });
 
-      debugLog('Sending success response');
+      if (refreshToken) {
+        res.cookie('refreshToken', refreshToken, {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === 'production',
+          maxAge: 2592000000, // 30 days (30 * 24 * 60 * 60 * 1000)
+        });
+      }
+
       return res.status(HttpStatus.OK).json({
         success: true,
         user: {
@@ -56,9 +67,50 @@ export class AuthController {
     }
   }
 
+  @Post('refresh')
+  async refreshToken(@Body('refreshToken') refreshToken: string, @Res() res: Response) {
+    debugLog('Refresh token endpoint called');
+    
+    if (!refreshToken) {
+      return res.status(HttpStatus.BAD_REQUEST).json({
+        success: false,
+        message: 'Refresh token is required',
+      });
+    }
+    
+    try {
+      const newTokens = await this.authService.refreshIdToken(refreshToken);
+      
+      // Update cookies with new tokens
+      res.cookie('authToken', newTokens.idToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        maxAge: 2592000000, // 30 days
+      });
+
+      res.cookie('refreshToken', newTokens.refreshToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        maxAge: 2592000000, // 30 days
+      });
+
+      return res.status(HttpStatus.OK).json({
+        success: true,
+        message: 'Token refreshed successfully',
+      });
+    } catch (error) {
+      console.error('Token refresh failed:', error);
+      return res.status(HttpStatus.UNAUTHORIZED).json({
+        success: false,
+        message: 'Failed to refresh token',
+      });
+    }
+  }
+
   @Post('logout')
   logout(@Res() res: Response) {
     res.clearCookie('authToken');
+    res.clearCookie('refreshToken');
     return res.status(HttpStatus.OK).json({
       success: true,
       message: 'Logged out successfully',
@@ -192,19 +244,32 @@ export class AuthController {
             try {
                 const result = await signInWithEmailAndPassword(auth, email, password);
                 const idToken = await result.user.getIdToken();
+                const refreshToken = result.user.refreshToken;
+                
+                console.log('Login successful, tokens obtained:', {
+                    hasIdToken: !!idToken,
+                    hasRefreshToken: !!refreshToken,
+                    idTokenLength: idToken?.length,
+                    refreshTokenLength: refreshToken?.length
+                });
                 
                 const response = await fetch('/auth/verify', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                     },
-                    body: JSON.stringify({ token: idToken }),
+                    body: JSON.stringify({ 
+                        token: idToken,
+                        refreshToken: refreshToken || undefined 
+                    }),
                 });
 
                 if (response.ok) {
                     window.location.href = '/';
                 } else {
-                    alert('Authentication failed');
+                    const errorText = await response.text();
+                    console.error('Authentication failed:', response.status, errorText);
+                    alert('Authentication failed: ' + errorText);
                 }
             } catch (error) {
                 console.error('Error during sign-in:', error);
@@ -220,19 +285,32 @@ export class AuthController {
             try {
                 const result = await createUserWithEmailAndPassword(auth, email, password);
                 const idToken = await result.user.getIdToken();
+                const refreshToken = result.user.refreshToken;
+                
+                console.log('Registration successful, tokens obtained:', {
+                    hasIdToken: !!idToken,
+                    hasRefreshToken: !!refreshToken,
+                    idTokenLength: idToken?.length,
+                    refreshTokenLength: refreshToken?.length
+                });
                 
                 const response = await fetch('/auth/verify', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                     },
-                    body: JSON.stringify({ token: idToken }),
+                    body: JSON.stringify({ 
+                        token: idToken,
+                        refreshToken: refreshToken || undefined 
+                    }),
                 });
 
                 if (response.ok) {
                     window.location.href = '/';
                 } else {
-                    alert('Authentication failed');
+                    const errorText = await response.text();
+                    console.error('Authentication failed:', response.status, errorText);
+                    alert('Authentication failed: ' + errorText);
                 }
             } catch (error) {
                 console.error('Error during registration:', error);

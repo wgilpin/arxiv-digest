@@ -77,18 +77,6 @@ export class GrokProvider implements LLMProvider {
         },
       };
     } catch (error) {
-      debugLog('Grok provider error details:', {
-        status: error.response?.status,
-        statusText: error.response?.statusText,
-        data: error.response?.data,
-        message: error.message,
-        config: {
-          url: error.config?.url,
-          method: error.config?.method,
-          headers: error.config?.headers ? { ...error.config.headers, Authorization: '[REDACTED]' } : undefined
-        }
-      });
-      
       if (error.response) {
         const errorMessage = error.response.data?.error?.message || 
                            error.response.data?.message || 

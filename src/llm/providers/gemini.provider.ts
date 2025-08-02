@@ -55,11 +55,6 @@ export class GeminiProvider implements LLMProvider {
       const response = await result.response;
       const content = response.text();
 
-      debugLog('Gemini provider response received:', {
-        contentLength: content.length,
-        model: request.model || this.defaultModel
-      });
-
       return {
         content,
         model: request.model || this.defaultModel,

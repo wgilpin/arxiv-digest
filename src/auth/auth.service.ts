@@ -71,4 +71,58 @@ export class AuthService {
       throw new Error('Failed to delete user');
     }
   }
+
+  async refreshIdToken(refreshToken: string): Promise<{ idToken: string; refreshToken: string }> {
+    try {
+      debugLog('Attempting to refresh ID token using Firebase REST API');
+      
+      if (!process.env.FIREBASE_API_KEY) {
+        throw new Error('FIREBASE_API_KEY environment variable is not set');
+      }
+      
+      const url = `https://securetoken.googleapis.com/v1/token?key=${process.env.FIREBASE_API_KEY}`;
+      const requestBody = {
+        grant_type: 'refresh_token',
+        refresh_token: refreshToken,
+      };
+      
+      debugLog('Making request to Firebase token endpoint');
+      
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody),
+      });
+
+      debugLog('Firebase token endpoint response status:', response.status);
+
+      if (!response.ok) {
+        let errorData: any;
+        try {
+          errorData = await response.json();
+        } catch (parseError) {
+          errorData = { message: 'Failed to parse error response' };
+        }
+        debugLog('Token refresh failed with status:', response.status, 'error:', errorData);
+        throw new Error(`Failed to refresh token: ${response.status} ${errorData.error?.message || 'Unknown error'}`);
+      }
+
+      const data = await response.json();
+      debugLog('Token refresh successful');
+      
+      if (!data.id_token || !data.refresh_token) {
+        throw new Error('Invalid response from Firebase: missing tokens');
+      }
+      
+      return {
+        idToken: data.id_token,
+        refreshToken: data.refresh_token,
+      };
+    } catch (error) {
+      console.error('Error refreshing token:', error);
+      throw new Error(`Failed to refresh token: ${error.message}`);
+    }
+  }
 }

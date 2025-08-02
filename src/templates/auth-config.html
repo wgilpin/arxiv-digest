@@ -48,12 +48,16 @@
         // Send token to backend for verification
         try {
           const idToken = await user.getIdToken();
+          const refreshToken = user.refreshToken;
           const response = await fetch('/auth/verify', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ token: idToken })
+            body: JSON.stringify({ 
+              token: idToken,
+              refreshToken: refreshToken 
+            })
           });
           
           if (!response.ok) {
