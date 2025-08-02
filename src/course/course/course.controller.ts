@@ -425,19 +425,20 @@ export class CourseController {
       debugLog(`User accessed first lesson ${courseId}/${moduleIdx}/${lessonIdx} (${lesson.title}) with no content, triggering generation`);
       
       setImmediate(() => {
-        this.courseService.prepareNextLesson(req.user.uid, courseId).catch((error) => {
+        this.courseService.prepareSpecificLesson(req.user.uid, courseId, moduleIdx, lessonIdx).catch((error) => {
           console.error('Background lesson preparation failed:', error);
         });
       });
     } else if (nextLessonNeedsContent && navigation.next) {
       debugLog(`User accessed lesson ${courseId}/${moduleIdx}/${lessonIdx} (${lesson.title}), next lesson has no content, triggering background generation for specific next lesson`);
       
+      const nextLesson = navigation.next;
       setImmediate(() => {
         this.courseService.prepareSpecificLesson(
           req.user.uid, 
           courseId, 
-          navigation.next.moduleIndex, 
-          navigation.next.lessonIndex
+          nextLesson.moduleIndex, 
+          nextLesson.lessonIndex
         ).catch((error) => {
           console.error('Background specific lesson preparation failed:', error);
         });
@@ -525,10 +526,16 @@ export class CourseController {
       
       // Only trigger generation if the next lesson doesn't have content yet
       if (course && navigation.next && !navigation.next.hasContent) {
-        debugLog(`User completed lesson ${courseId}/${moduleIdx}/${lessonIdx}, next lesson has no content, triggering background generation`);
+        debugLog(`User completed lesson ${courseId}/${moduleIdx}/${lessonIdx}, next lesson has no content, triggering background generation for specific next lesson`);
         
+        const nextLesson = navigation.next;
         setImmediate(() => {
-          this.courseService.prepareNextLesson(req.user.uid, courseId).catch((error) => {
+          this.courseService.prepareSpecificLesson(
+            req.user.uid, 
+            courseId, 
+            nextLesson.moduleIndex, 
+            nextLesson.lessonIndex
+          ).catch((error) => {
             console.error('Background lesson preparation after completion failed:', error);
           });
         });
