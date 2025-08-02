@@ -112,6 +112,9 @@ export class PaperController {
   @UseGuards(AuthGuard)
   async createCourse(@Body('arxivId') arxivId: string, @Res() res: Response, @Req() req: Request & { user: { uid: string } }) {
     try {
+      // Extract clean ArXiv ID from input (handles both URLs and raw IDs)
+      const cleanArxivId = this.arxivService.extractArxivId(arxivId);
+      
       const paperTitle = await this.arxivService.fetchPaperTitle(arxivId);
       const paperText = await this.arxivService.getPaperText(arxivId);
       const conceptsWithImportance = 
@@ -141,12 +144,12 @@ export class PaperController {
       }
 
       const courseId = await this.courseRepository.createCourse(req.user.uid, {
-        arxivId: arxivId,
+        arxivId: cleanArxivId,
         title: paperTitle,
         description: `Learning course for ${paperTitle}`,
         paperTitle: paperTitle,
         paperAuthors: [], // TODO: Extract from ArXiv
-        paperUrl: `https://arxiv.org/abs/${arxivId}`,
+        paperUrl: `https://arxiv.org/abs/${cleanArxivId}`,
         modules: [],
         createdAt: new Date(),
         updatedAt: new Date(),

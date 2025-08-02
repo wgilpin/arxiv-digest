@@ -118,12 +118,22 @@ export class ArxivService {
   }
 
   /**
+   * Extracts ArXiv ID from either a URL or ID string (public method)
+   * @param input ArXiv URL (e.g., https://arxiv.org/abs/2507.11768) or ID (e.g., 2507.11768)
+   * @returns The extracted ArXiv ID
+   * @throws Error if the input is not a valid ArXiv URL or ID
+   */
+  public extractArxivId(input: string): string {
+    return this.extractArxivIdInternal(input);
+  }
+
+  /**
    * Extracts ArXiv ID from either a URL or ID string
    * @param input ArXiv URL (e.g., https://arxiv.org/abs/2507.11768) or ID (e.g., 2507.11768)
    * @returns The extracted ArXiv ID
    * @throws Error if the input is not a valid ArXiv URL or ID
    */
-  private extractArxivId(input: string): string {
+  private extractArxivIdInternal(input: string): string {
     if (!input || typeof input !== 'string') {
       throw new Error('Invalid input: must be a non-empty string');
     }
@@ -174,7 +184,7 @@ export class ArxivService {
    * @returns A promise that resolves to the paper's title.
    */
   async fetchPaperTitle(arxivInput: string): Promise<string> {
-    const arxivId = this.extractArxivId(arxivInput);
+    const arxivId = this.extractArxivIdInternal(arxivInput);
     try {
       const response = await axios.get(this.ARXIV_API_URL, {
         params: {
@@ -225,7 +235,7 @@ export class ArxivService {
    * @returns A promise that resolves to the paper's text.
    */
   async getPaperText(arxivInput: string): Promise<string> {
-    const arxivId = this.extractArxivId(arxivInput);
+    const arxivId = this.extractArxivIdInternal(arxivInput);
     try {
       const paths = this.getArxivStoragePaths(arxivId);
 
