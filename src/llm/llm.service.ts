@@ -4,6 +4,7 @@ import { GeminiProvider } from './providers/gemini.provider';
 import { GrokProvider } from './providers/grok.provider';
 import { ModelSelectorService } from './model-selector.service';
 import { debugLog } from '../common/debug-logger';
+import { traceable } from "langsmith/traceable";
 
 @Injectable()
 export class LLMService {
@@ -33,39 +34,41 @@ export class LLMService {
     request: LLMRequest, 
     providerType?: LLMProviderType
   ): Promise<LLMResponse> {
-    const targetProvider = providerType || this.defaultProvider;
-    
-    debugLog('Generating content with provider:', targetProvider, {
-      promptLength: request.prompt.length,
-      model: request.model
-    });
+    return traceable(async (request: LLMRequest, providerType?: LLMProviderType) => {
+      const targetProvider = providerType || this.defaultProvider;
+      
+      debugLog('Generating content with provider:', targetProvider, {
+        promptLength: request.prompt.length,
+        model: request.model
+      });
 
-    try {
-      const provider = this.getProvider(providerType);
-      const result = await provider.generateContent(request);
-      
-      // Track token usage
-      this.trackTokenUsage(result, request.model || 'unknown');
-      
-      return result;
-    } catch (error) {
-      debugLog(`Provider '${targetProvider}' failed, attempting fallback:`, error.message);
-      
-      // Try fallback to other available providers
-      for (const [type, fallbackProvider] of this.providers.entries()) {
-        if (type !== targetProvider && fallbackProvider.isAvailable()) {
-          debugLog(`Falling back to provider: ${type}`);
-          try {
-            return await fallbackProvider.generateContent(request);
-          } catch (fallbackError) {
-            debugLog(`Fallback provider '${type}' also failed:`, fallbackError.message);
+      try {
+        const provider = this.getProvider(providerType);
+        const result = await provider.generateContent(request);
+        
+        // Track token usage
+        this.trackTokenUsage(result, request.model || 'unknown');
+        
+        return result;
+      } catch (error) {
+        debugLog(`Provider '${targetProvider}' failed, attempting fallback:`, error.message);
+        
+        // Try fallback to other available providers
+        for (const [type, fallbackProvider] of this.providers.entries()) {
+          if (type !== targetProvider && fallbackProvider.isAvailable()) {
+            debugLog(`Falling back to provider: ${type}`);
+            try {
+              return await fallbackProvider.generateContent(request);
+            } catch (fallbackError) {
+              debugLog(`Fallback provider '${type}' also failed:`, fallbackError.message);
+            }
           }
         }
+        
+        // If all providers fail, throw the original error
+        throw error;
       }
-      
-      // If all providers fail, throw the original error
-      throw error;
-    }
+    }, { run_type: "llm" })(request, providerType);
   }
 
   private getProvider(providerType?: LLMProviderType): LLMProvider {
@@ -129,28 +132,36 @@ export class LLMService {
   }
 
   async extractPdf(request: Omit<LLMRequest, 'model'>): Promise<LLMResponse> {
-    // PDF extraction requires file upload capability, currently only available with Gemini
-    try {
-      return this.generateContentForUsage(request, ModelUsage.PDF_EXTRACTION);
-    } catch (error) {
-      debugLog('PDF extraction failed, this may be due to network issues with Gemini API');
-      
-      // For now, if PDF extraction fails completely, return a fallback response
-      // In a production system, you might want to implement alternative PDF processing
-      throw new Error(`PDF extraction failed: ${error.message}. Please try again later or use a different input method.`);
-    }
+    return traceable(async (request: Omit<LLMRequest, 'model'>) => {
+      // PDF extraction requires file upload capability, currently only available with Gemini
+      try {
+        return this.generateContentForUsage(request, ModelUsage.PDF_EXTRACTION);
+      } catch (error) {
+        debugLog('PDF extraction failed, this may be due to network issues with Gemini API');
+        
+        // For now, if PDF extraction fails completely, return a fallback response
+        // In a production system, you might want to implement alternative PDF processing
+        throw new Error(`PDF extraction failed: ${error.message}. Please try again later or use a different input method.`);
+      }
+    }, { run_type: "llm" })(request);
   }
 
   async extractConcepts(request: Omit<LLMRequest, 'model'>): Promise<LLMResponse> {
-    return this.generateContentForUsage(request, ModelUsage.CONCEPT_EXTRACTION);
+    return traceable(async (request: Omit<LLMRequest, 'model'>) => {
+      return this.generateContentForUsage(request, ModelUsage.CONCEPT_EXTRACTION);
+    }, { run_type: "llm" })(request);
   }
 
   async generateLessonTitles(request: Omit<LLMRequest, 'model'>): Promise<LLMResponse> {
-    return this.generateContentForUsage(request, ModelUsage.LESSON_TITLES);
+    return traceable(async (request: Omit<LLMRequest, 'model'>) => {
+      return this.generateContentForUsage(request, ModelUsage.LESSON_TITLES);
+    }, { run_type: "llm" })(request);
   }
 
   async generateLesson(request: Omit<LLMRequest, 'model'>): Promise<LLMResponse> {
-    return this.generateContentForUsage(request, ModelUsage.LESSON_GENERATION);
+    return traceable(async (request: Omit<LLMRequest, 'model'>) => {
+      return this.generateContentForUsage(request, ModelUsage.LESSON_GENERATION);
+    }, { run_type: "llm" })(request);
   }
 
   /**

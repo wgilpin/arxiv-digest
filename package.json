@@ -38,6 +38,7 @@
     "firebase": "^10.14.1",
     "firebase-admin": "^13.4.0",
     "firebaseui": "^6.1.0",
+    "langsmith": "^0.3.50",
     "marked": "^4.3.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
