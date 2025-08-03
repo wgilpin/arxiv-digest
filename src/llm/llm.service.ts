@@ -123,11 +123,19 @@ export class LLMService {
     const provider = this.modelSelector.getProviderForUsage(usage);
     const model = this.modelSelector.getModelForUsage(usage, provider);
     
-    this.modelSelector.logModelSelection(usage, provider);
+    // Determine the actual provider based on the model name
+    let actualProvider = provider;
+    if (model.startsWith('grok')) {
+      actualProvider = LLMProviderType.GROK;
+    } else if (model.startsWith('gemini')) {
+      actualProvider = LLMProviderType.GEMINI;
+    }
+    
+    this.modelSelector.logModelSelection(usage, actualProvider);
     
     return this.generateContent(
       { ...request, model },
-      provider
+      actualProvider
     );
   }
 

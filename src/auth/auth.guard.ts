@@ -27,14 +27,12 @@ export class AuthGuard implements CanActivate {
       const decodedToken = await this.authService.verifyIdToken(token);
       request.user = decodedToken;
       return true;
-    } catch (error) {
-      debugLog("Auth: decode token error", error);
+    } catch (_) {
       
       // Try to refresh the token using refresh token from cookie
       const refreshToken = this.extractRefreshTokenFromCookie(request);
       if (refreshToken) {
         try {
-          debugLog("Auth: attempting token refresh");
           const newTokens = await this.authService.refreshIdToken(refreshToken);
           
           // Update cookies with new tokens
@@ -53,7 +51,6 @@ export class AuthGuard implements CanActivate {
           // Verify the new token and set user
           const decodedNewToken = await this.authService.verifyIdToken(newTokens.idToken);
           request.user = decodedNewToken;
-          debugLog("Auth: token refresh successful");
           return true;
         } catch (refreshError) {
           debugLog("Auth: token refresh failed", refreshError);

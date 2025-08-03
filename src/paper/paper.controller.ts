@@ -236,6 +236,6 @@ export class PaperController {
 
     await this.courseService.generateSyllabus(req.user.uid, id, ratings);
 
-    res.redirect(`/courses/${id}`);
+    return res.redirect(`/courses/${id}`);
   }
 }
