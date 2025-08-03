@@ -739,65 +739,57 @@ Use proper Markdown formatting but keep it concise since this is a peripheral co
   }
 
   /**
-   * Summarizes Wikipedia article content into a lesson.
+   * Generates lesson content with optional Wikipedia source material.
+   * This unified function handles both Wikipedia-based and pure LLM generation.
    */
-  private async summarizeWikipediaArticle(
-    articleContent: string,
-    topic: string,
+  private async generateUnifiedLessonContent(
     concept: string,
-    wikipediaTitle: string,
-    wikipediaUrl: string,
-    paperContent?: string
+    topic: string,
+    previousLessons?: Array<{ title: string; content: string }>,
+    knowledgeLevel?: string,
+    paperContent?: string,
+    wikipediaSource?: {
+      content: string;
+      title: string;
+      url: string;
+    }
   ): Promise<{ title: string; content: string }> {
     try {
+      // Generate the base prompt
+      const basePrompt = this.generateFocusedLessonPrompt(
+        concept, 
+        topic, 
+        previousLessons, 
+        knowledgeLevel, 
+        paperContent
+      );
 
-      const paperContextSection = paperContent ? `
+      let prompt = basePrompt;
+      
+      // If we have Wikipedia content, modify the prompt to include it
+      if (wikipediaSource) {
+        // Insert Wikipedia content and attribution requirement
+        const wikipediaSection = `
 
-CRITICAL CONTEXT - Original Paper Focus:
-The goal of this lesson is NOT to teach "${concept}" comprehensively, but specifically to help the reader understand how "${concept}" is used and applied in this research paper. Focus on the aspects, applications, and nuances of "${concept}" that are most relevant to understanding the paper's methodology, contributions, and results.
+WIKIPEDIA SOURCE MATERIAL:
+The following content is from Wikipedia and should be used as the primary source for this lesson. Synthesize and adapt this information while maintaining accuracy.
 
-Here are key excerpts from the original paper for context (focus your lesson on these aspects):
-${paperContent.slice(0, 4000)}
+Wikipedia Article: "${wikipediaSource.title}"
+${wikipediaSource.content.slice(0, 8000)}
 
-IMPORTANT: Tailor your explanation to bridge the gap between general knowledge of "${concept}" and its specific application in this research paper.` : '';
+IMPORTANT: You must include this attribution at the end of your lesson:
+"**Source:** [${wikipediaSource.title}](${wikipediaSource.url}) (Wikipedia)"`;
 
-      const prompt = `
-Create a focused educational lesson about the topic: "${topic}" (part of the broader concept: "${concept}") using the following Wikipedia article content.
+        // Insert the Wikipedia section before the final formatting instructions
+        const formatIndex = prompt.indexOf('Use proper Markdown formatting:');
+        if (formatIndex > -1) {
+          prompt = prompt.slice(0, formatIndex) + wikipediaSection + '\n\n' + prompt.slice(formatIndex);
+        } else {
+          prompt += wikipediaSection;
+        }
+      }
 
-${paperContent ? 'Your goal is to help the user understand this topic sufficiently to comprehend the research paper provided in the context below.' : 'The lesson should help the user understand this topic at an appropriate technical level.'}${paperContextSection}
-
-IMPORTANT: This lesson should be focused, concise, and readable in 2-3 minutes. Focus ONLY on the specific topic provided, not the entire concept.
-
-Please structure your response as follows:
-TITLE: [A clear, engaging title for the lesson]
-
-CONTENT:
-[Write the lesson content in well-formatted Markdown. For this focused lesson, include:]
-- Clear definition/explanation of this specific topic
-- Why this topic matters within the broader concept${paperContent ? '\n- How this concept is specifically used in the research context provided' : ''}
-- Key points or principles for this topic
-- Brief practical example or application${paperContent ? ' (preferably related to the paper context)' : ''}
-- How this topic connects to the overall concept${paperContent ? ' and the research methodology' : ''}
-
-Use proper Markdown formatting:
-- **Bold** for important terms and section headers
-- *Italics* for emphasis
-- \`code\` for technical terms, variables, and mathematical notation
-- Bullet points for lists
-- Code blocks for examples
-- ## for section headers
-
-Make the content engaging, informative, and approximately 200-350 words (2-3 minute read).
-
-IMPORTANT: End the lesson with a source attribution: "**Source:** [${wikipediaTitle}](${wikipediaUrl}) (Wikipedia)"
-
-Wikipedia Article Content:
-${articleContent.slice(0, 8000)} // Use more content for better context
-`;
-
-      const result = await this.llmService.generateLesson({
-        prompt,
-      });
+      const result = await this.llmService.generateLesson({ prompt });
       const response = result.content;
 
       // Parse the structured response
@@ -810,25 +802,32 @@ ${articleContent.slice(0, 8000)} // Use more content for better context
 
       let content = contentMatch ? contentMatch[1].trim() : response;
 
-      // Ensure source attribution is present
-      if (!content.includes('**Source:**')) {
-        content += `\n\n**Source:** [${wikipediaTitle}](${wikipediaUrl}) (Wikipedia)`;
+      // Ensure Wikipedia source attribution is present if we used Wikipedia
+      if (wikipediaSource && !content.includes('**Source:**')) {
+        content += `\n\n**Source:** [${wikipediaSource.title}](${wikipediaSource.url}) (Wikipedia)`;
       }
 
       const processedContent = this.escapeLatexInMath(content);
 
       return {
         title,
-        content: processedContent || `This lesson covers the topic of ${topic} within ${concept}, providing a focused introduction based on Wikipedia content.`,
+        content: processedContent || `This lesson covers the topic of ${topic} within ${concept}.`,
       };
     } catch (error) {
-      console.error(`Error summarizing Wikipedia content for ${topic}:`, error);
+      console.error(`Error generating lesson content for ${topic}:`, error);
 
-      // Fallback content with source attribution
-      return {
-        title: `Introduction to ${topic}`,
-        content: `This lesson provides an introduction to ${topic}, covering its key principles, applications, and importance in the field of ${concept}.\n\n**Source:** [${wikipediaTitle}](${wikipediaUrl}) (Wikipedia)`,
-      };
+      // Fallback content
+      if (wikipediaSource) {
+        return {
+          title: `Introduction to ${topic}`,
+          content: `This lesson provides an introduction to ${topic}, covering its key principles, applications, and importance in the field of ${concept}.\n\n**Source:** [${wikipediaSource.title}](${wikipediaSource.url}) (Wikipedia)`,
+        };
+      } else {
+        return {
+          title: `Introduction to ${topic}`,
+          content: `This lesson provides an introduction to ${topic}, covering its key principles, applications, and importance in the field. Understanding ${topic} is essential for grasping more advanced topics and practical applications in this domain.`,
+        };
+      }
     }
   }
 
@@ -845,9 +844,11 @@ ${articleContent.slice(0, 8000)} // Use more content for better context
   ): Promise<{ title: string; content: string }> {
     // Always use the broader concept for Wikipedia search, not the specific lesson topic
     const searchQuery = concept;
-    debugLog(`[LESSON GEN START] Generating lesson for topic: "${topic || concept}" within concept: "${concept}"`);
+    const lessonTopic = topic || concept;
+    
+    debugLog(`[LESSON GEN START] Generating lesson for topic: "${lessonTopic}" within concept: "${concept}"`);
     debugLog(`[LESSON GEN START] Using Wikipedia search query: "${searchQuery}"`);
-    debugLog(`[LESSON GEN START] Stack trace:`, new Error().stack?.split('\n').slice(1, 4).join('\n'));
+    debugLog(`[LESSON GEN START] Previous lessons: "${previousLessons?.length}, first is "${previousLessons?.[0]?.content.length || 0}"`);
 
     try {
       // Step 1: Try Wikipedia
@@ -855,14 +856,21 @@ ${articleContent.slice(0, 8000)} // Use more content for better context
       
       if (wikipediaResult) {
         debugLog(`Using Wikipedia article: "${wikipediaResult.title}"`);
-        const lesson = await this.summarizeWikipediaArticle(
-          wikipediaResult.content,
-          topic || concept, // Use the specific topic for lesson content, not the search query
+        
+        // Use the unified generation function with Wikipedia source
+        const lesson = await this.generateUnifiedLessonContent(
           concept,
-          wikipediaResult.title,
-          wikipediaResult.url,
-          paperContent
+          lessonTopic,
+          previousLessons,
+          knowledgeLevel,
+          paperContent,
+          {
+            content: wikipediaResult.content,
+            title: wikipediaResult.title,
+            url: wikipediaResult.url
+          }
         );
+        
         debugLog(`Successfully generated lesson from Wikipedia for: ${searchQuery}`);
         return lesson;
       }
@@ -874,25 +882,28 @@ ${articleContent.slice(0, 8000)} // Use more content for better context
       debugLog('Falling back to LLM generation due to Wikipedia error...');
     }
 
-    // Step 2: Fallback to existing LLM generation
+    // Step 2: Fallback to LLM generation without Wikipedia
     debugLog('Using LLM-based content generation as fallback...');
     try {
-      const fallbackLesson = await this.generateLessonContent(
+      const fallbackLesson = await this.generateUnifiedLessonContent(
         concept,
-        topic,
+        lessonTopic,
         previousLessons,
         knowledgeLevel,
         paperContent
+        // No Wikipedia source for pure LLM generation
       );
+      
       debugLog(`Successfully generated lesson using LLM fallback for: ${searchQuery}`);
       return fallbackLesson;
     } catch (error) {
       console.error('Error with LLM fallback generation:', error);
       
       // Ultimate fallback
+      debugLog('FAIL: Using ultimate fallback lesson content...');
       return {
-        title: `Introduction to ${topic || concept}`,
-        content: `This lesson provides an introduction to ${topic || concept}, covering its key principles, applications, and importance in the field. Understanding ${topic || concept} is essential for grasping more advanced topics and practical applications in this domain.`,
+        title: `Introduction to ${lessonTopic}`,
+        content: `This lesson provides an introduction to ${lessonTopic}, covering its key principles, applications, and importance in the field. Understanding ${lessonTopic} is essential for grasping more advanced topics and practical applications in this domain.`,
       };
     }
   }
@@ -1212,25 +1223,43 @@ Concept: ${concept}
     knowledgeLevel?: string,
     paperContent?: string
   ): string {
-    const previousLessonsContext = previousLessons && previousLessons.length > 0 
-      ? `
+    // Build previous lessons context
+    let previousLessonsContext = '';
+    if (previousLessons && previousLessons.length > 0) {
+      const lessonsList = previousLessons.map((lesson, index) => 
+        `${index + 1}. "${lesson.title}"\n${lesson.content}`
+      ).join('\n\n');
+      
+      previousLessonsContext = `
 IMPORTANT CONTEXT - Previous lessons in this module:
-${previousLessons.map((lesson, index) => `
-${index + 1}. "${lesson.title}"
-${lesson.content}
-`).join('\n')}
+${lessonsList}
 
-CRITICAL: Do NOT repeat information that has already been covered in the previous lessons above. Build upon what has been taught, but avoid duplicating explanations, examples, or concepts that have already been thoroughly covered.` 
-      : '';
+CRITICAL: Do NOT repeat information that has already been covered in the previous lessons above. Build upon what has been taught, but avoid duplicating explanations, examples, or concepts that have already been thoroughly covered.`;
+    }
 
-    const knowledgeLevelContext = knowledgeLevel 
-      ? `
+    // Build knowledge level context
+    let knowledgeLevelContext = '';
+    if (knowledgeLevel) {
+      let knowledgeGuidance = '';
+      
+      if (knowledgeLevel === 'No knowledge of the concept') {
+        knowledgeGuidance = 'Start with fundamentals and avoid assumptions about prior knowledge.';
+      } else if (knowledgeLevel === 'Basic understanding of the concept') {
+        knowledgeGuidance = 'Build on basic concepts but explain technical details thoroughly.';
+      } else {
+        knowledgeGuidance = 'Focus on technical depth while avoiding redundant basic explanations.';
+      }
+      
+      knowledgeLevelContext = `
 
 IMPORTANT: The user has self-assessed their knowledge level for "${concept}" as: "${knowledgeLevel}". 
-Tailor the lesson complexity, examples, and explanations to be appropriate for someone at this knowledge level. ${knowledgeLevel === 'No knowledge of the concept' ? 'Start with fundamentals and avoid assumptions about prior knowledge.' : knowledgeLevel === 'Basic understanding of the concept' ? 'Build on basic concepts but explain technical details thoroughly.' : 'Focus on technical depth while avoiding redundant basic explanations.'}`
-      : '';
+Tailor the lesson complexity, examples, and explanations to be appropriate for someone at this knowledge level. ${knowledgeGuidance}`;
+    }
 
-    const paperContextSection = paperContent ? `
+    // Build paper context section
+    let paperContextSection = '';
+    if (paperContent) {
+      paperContextSection = `
 
 CRITICAL CONTEXT - Original Paper Focus:
 The goal of this lesson is NOT to teach "${topic}" comprehensively, but specifically to help the reader understand how "${topic}" relates to "${concept}" as used in this research paper. Focus on the aspects, applications, and nuances that are most relevant to understanding the paper's methodology, contributions, and results.
@@ -1238,12 +1267,39 @@ The goal of this lesson is NOT to teach "${topic}" comprehensively, but specific
 Here are key excerpts from the original paper for context (focus your lesson on these aspects):
 ${paperContent.slice(0, 4000)}
 
-IMPORTANT: Tailor your explanation to bridge the gap between general knowledge and its specific application in this research paper.` : '';
+IMPORTANT: Tailor your explanation to bridge the gap between general knowledge and its specific application in this research paper.`;
+    }
+
+    // Build user knowledge intro
+    let userKnowledgeIntro = 'The lesson should help the user understand this topic sufficiently to comprehend the research paper.';
+    if (knowledgeLevel) {
+      userKnowledgeIntro = `The user has self-assessed their knowledge of "${concept}" as: "${knowledgeLevel}". Your goal is to bridge the gap between their current understanding and what's needed to comprehend the research paper.`;
+    }
+
+    // Build content structure bullets
+    const contentBullets = [
+      '- Clear definition/explanation of this specific topic',
+      '- Why this topic matters within the broader concept'
+    ];
+    
+    if (paperContent) {
+      contentBullets.push('- How this topic is specifically used in the research context provided');
+    }
+    
+    contentBullets.push('- Key points or principles for this topic');
+    
+    if (paperContent) {
+      contentBullets.push('- Brief practical example or application (preferably related to the paper context)');
+      contentBullets.push('- How this topic connects to the overall concept and the research methodology');
+    } else {
+      contentBullets.push('- Brief practical example or application');
+      contentBullets.push('- How this topic connects to the overall concept');
+    }
 
     return `
 Create a focused educational lesson about the topic: "${topic}" (part of the broader concept: "${concept}")
 
-${knowledgeLevel ? `The user has self-assessed their knowledge of "${concept}" as: "${knowledgeLevel}". Your goal is to bridge the gap between their current understanding and what's needed to comprehend the research paper.` : 'The lesson should help the user understand this topic sufficiently to comprehend the research paper.'}${previousLessonsContext}${paperContextSection}
+${userKnowledgeIntro}${previousLessonsContext}${knowledgeLevelContext}${paperContextSection}
 
 IMPORTANT: This lesson should be focused, concise, and readable in 2-3 minutes. Focus ONLY on the specific topic provided, not the entire concept.
 
@@ -1252,11 +1308,7 @@ TITLE: [A clear, engaging title for the lesson]
 
 CONTENT:
 [Write the lesson content in well-formatted Markdown. For this focused lesson, include:]
-- Clear definition/explanation of this specific topic
-- Why this topic matters within the broader concept${paperContent ? '\n- How this topic is specifically used in the research context provided' : ''}
-- Key points or principles for this topic
-- Brief practical example or application${paperContent ? ' (preferably related to the paper context)' : ''}
-- How this topic connects to the overall concept${paperContent ? ' and the research methodology' : ''}
+${contentBullets.join('\n')}
 
 Use proper Markdown formatting:
 - **Bold** for important terms and section headers
@@ -1270,123 +1322,7 @@ Make the content engaging, informative, and approximately 200-350 words (2-3 min
 `;
   }
 
-  private generateComprehensiveLessonPrompt(
-    concept: string,
-    previousLessons?: Array<{ title: string; content: string }>,
-    knowledgeLevel?: string,
-    paperContent?: string
-  ): string {
-    const previousLessonsContext = previousLessons && previousLessons.length > 0 
-      ? `
-IMPORTANT CONTEXT - Previous lessons in this module:
-${previousLessons.map((lesson, index) => `
-${index + 1}. "${lesson.title}"
-${lesson.content}
-`).join('\n')}
 
-CRITICAL: Do NOT repeat information that has already been covered in the previous lessons above. Build upon what has been taught, but avoid duplicating explanations, examples, or concepts that have already been thoroughly covered.` 
-      : '';
-
-    const knowledgeLevelContext = knowledgeLevel 
-      ? `
-
-IMPORTANT: The user has self-assessed their knowledge level for "${concept}" as: "${knowledgeLevel}". 
-Tailor the lesson complexity, examples, and explanations to be appropriate for someone at this knowledge level. ${knowledgeLevel === 'No knowledge of the concept' ? 'Start with fundamentals and avoid assumptions about prior knowledge.' : knowledgeLevel === 'Basic understanding of the concept' ? 'Build on basic concepts but explain technical details thoroughly.' : 'Focus on technical depth while avoiding redundant basic explanations.'}`
-      : '';
-
-    const paperContextSection = paperContent ? `
-
-CRITICAL CONTEXT - Original Paper Focus:  
-The goal of this lesson is NOT to teach "${concept}" comprehensively, but specifically to help the reader understand how "${concept}" is used and applied in this research paper. Focus on the aspects, applications, and nuances of "${concept}" that are most relevant to understanding the paper's methodology, contributions, and results.
-
-Here are key excerpts from the original paper for context (focus your lesson on these aspects):
-${paperContent.slice(0, 4000)}
-
-IMPORTANT: Tailor your explanation to bridge the gap between general knowledge of "${concept}" and its specific application in this research paper.` : '';
-
-    return `
-Create a comprehensive educational lesson about the concept: "${concept}"
-
-${knowledgeLevel ? `The user has self-assessed their knowledge of "${concept}" as: "${knowledgeLevel}". Your goal is to bridge the gap between their current understanding and what's needed to comprehend the research paper.` : 'The lesson should help the user understand this concept sufficiently to comprehend the research paper.'}${previousLessonsContext}${paperContextSection}
-
-Please structure your response as follows:
-TITLE: [A clear, engaging title for the lesson]
-
-CONTENT:
-[Write the lesson content in well-formatted Markdown. Include:]
-- Clear definition and explanation of the concept
-- Why this concept is important${paperContent ? '\n- How this concept is specifically used in the research context provided' : ''}
-- Key principles or components
-- Real-world applications or examples${paperContent ? ' (preferably related to the paper context)' : ''}
-- How it relates to other concepts in the field${paperContent ? ' and the research methodology' : ''}
-- Common misconceptions or challenges
-- Further learning resources
-
-Use proper Markdown formatting:
-- **Bold** for important terms and section headers
-- *Italics* for emphasis
-- \`code\` for technical terms, variables, and mathematical notation
-- Bullet points for lists
-- Code blocks for examples
-- ## for section headers
-
-Make the content engaging, informative, and approximately 400-600 words.
-`;
-  }
-
-  /**
-   * Generates focused lesson content for a specific topic, designed for 2-3 minute reading.
-   * @param concept The main concept this lesson belongs to.
-   * @param topic The specific topic for this lesson.
-   * @param previousLessons Previous lessons in the same module for context.
-   * @param knowledgeLevel User's self-assessed knowledge level for this concept.
-   * @returns A promise that resolves to an object containing the lesson title and content.
-   */
-  async generateLessonContent(
-    concept: string,
-    topic?: string,
-    previousLessons?: Array<{ title: string; content: string }>,
-    knowledgeLevel?: string,
-    paperContent?: string,
-  ): Promise<{ title: string; content: string }> {
-    try {
-      const prompt = topic
-        ? this.generateFocusedLessonPrompt(concept, topic, previousLessons, knowledgeLevel, paperContent)
-        : this.generateComprehensiveLessonPrompt(concept, previousLessons, knowledgeLevel, paperContent);
-
-      const result = await this.llmService.generateLesson({
-        prompt,
-      });
-      const response = result.content;
-
-      // Parse the structured response
-      const titleMatch = response.match(/TITLE:\s*(.+)/i);
-      const contentMatch = response.match(/CONTENT:\s*([\s\S]+)/i);
-
-      const title = titleMatch
-        ? titleMatch[1].trim()
-        : `Understanding ${topic || concept}`;
-
-      const content = contentMatch ? contentMatch[1].trim() : response; // Use full response as content if parsing fails
-
-      const processedContent = this.escapeLatexInMath(content);
-
-      return {
-        title,
-        content:
-          processedContent ||
-          `This lesson covers ${topic ? `the topic of ${topic} within ${concept}` : `the fundamental concepts and applications of ${concept}`}. It provides ${topic ? 'a focused introduction' : 'a comprehensive introduction'} to help you understand this important ${topic ? 'topic' : 'concept'} in the field.`,
-      };
-    } catch (error) {
-      console.error(`Error generating lesson content for ${concept}:`, error);
-
-      // Fallback content
-      return {
-        title: `Introduction to ${topic || concept}`,
-        content: `This lesson provides an introduction to ${topic || concept}, covering its key principles, applications, and importance in the field. Understanding ${topic || concept} is essential for grasping more advanced topics and practical applications in this domain.`,
-      };
-    }
-  }
 
   private escapeLatexInMath(text: string): string {
     if (!text) {

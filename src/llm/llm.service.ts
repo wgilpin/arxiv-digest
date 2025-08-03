@@ -58,7 +58,13 @@ export class LLMService {
           if (type !== targetProvider && fallbackProvider.isAvailable()) {
             debugLog(`Falling back to provider: ${type}`);
             try {
-              return await fallbackProvider.generateContent(request);
+              // Create a new request with the appropriate model for the fallback provider
+              const fallbackRequest = { ...request };
+              
+              // Remove the model from the request to let the provider use its default
+              delete fallbackRequest.model;
+              
+              return await fallbackProvider.generateContent(fallbackRequest);
             } catch (fallbackError) {
               debugLog(`Fallback provider '${type}' also failed:`, fallbackError.message);
             }

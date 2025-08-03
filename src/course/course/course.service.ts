@@ -62,9 +62,18 @@ export class CourseService {
       throw new Error(`Course with ID ${courseId} not found.`);
     }
 
+    debugLog('Received ratings:', ratings);
+    
     const knowledgeGaps = Object.entries(ratings)
       .filter(([, rating]) => rating < 3)  // Changed from <= 3 to < 3 (exclude rating 3)
       .map(([concept]) => concept);
+    
+    debugLog('Knowledge gaps (concepts with rating < 3):', knowledgeGaps);
+    debugLog('Concepts rated 3 (should be excluded):', 
+      Object.entries(ratings)
+        .filter(([, rating]) => rating === 3)
+        .map(([concept]) => concept)
+    );
 
     // Store all concepts for future generation
     const plannedConcepts = knowledgeGaps.join(',');
@@ -92,6 +101,10 @@ export class CourseService {
       modules[moduleIndex] = newModule;
     }
 
+    // Log existing modules before update
+    debugLog('Existing modules before update:', course.modules?.map(m => m.title) || []);
+    debugLog('New modules to be saved:', modules.map(m => m.title));
+    
     // Save the course with modules
     await this.courseRepository.update(userId, courseId, { modules });
 
