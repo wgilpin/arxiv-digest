@@ -28,14 +28,16 @@ Academic papers often assume significant domain knowledge, creating barriers for
 - Course saving and management.
 - Progress tracking (lessons read).
 - Multi-course support.
+- User authentication with Firebase Auth.
+- User-specific data persistence.
 
 **Out of Scope (MVP)**:
 
 - Papers from other sources (non-ArXiv).
 - Interactive lessons/exercises.
-- Full user authentication (email/password).
 - Mobile optimization.
 - Detailed progress analytics.
+- Social features (sharing, collaboration).
 
 ## 2. Goals and Objectives
 
@@ -62,42 +64,51 @@ Academic papers often assume significant domain knowledge, creating barriers for
 
 ## 4. User Journey
 
-1. **Paper Input**:
+1. **Authentication**:
+    - User signs in using Firebase Auth (Google, email/password, or other providers).
+    - System creates or retrieves user profile and preferences.
+2. **Paper Input**:
     - User provides an ArXiv link or paper ID.
     - System downloads and parses the PDF.
-2. **Concept Extraction**:
-    - The system analyzes the paper to identify key technical concepts.
-3. **Knowledge Assessment**:
+3. **Concept Extraction**:
+    - The system analyzes the paper to identify key technical concepts using the configured LLM provider.
+4. **Knowledge Assessment**:
     - The user is presented with a list of concepts and self-rates their familiarity with the concept:
       - 0: No knowledge of the concept.
       - 1: Basic understanding of the concept.
       - 2: Fair understanding of the concept without technical details.
       - 3: Detailed technical understanding of the concept.
-4. **Gap Analysis**:
+5. **Gap Analysis**:
     - The system identifies knowledge gaps based on the user's self-assessment.
-5. **Course Generation**:
+6. **Course Generation**:
     - A personalized course is created with a syllabus, modules, and lessons.
-6. **Learning Interface**:
+    - Course is saved to the user's Firebase Firestore collection.
+7. **Learning Interface**:
     - The user can navigate the course, read lessons, and track their progress.
+    - Progress is automatically saved to Firebase Firestore per user.
 
 ## 5. Key Features
 
 ### 5.1 MVP Features
 
 1. **ArXiv Integration**: Direct paper download and parsing.
-2. **Concept Identification**: LLM-powered concept extraction.
+2. **Concept Identification**: Model-agnostic LLM-powered concept extraction.
 3. **Self-Rated Assessment**: A simple interface for users to rate their knowledge.
 4. **Course Generation**: Creates structured courses from syllabi.
-5. **Course Management**: Course listing and persistence.
-6. **Progress Tracking**: Automatic lesson completion tracking.
+5. **Course Management**: Course listing and persistence with user-specific data.
+6. **Progress Tracking**: Automatic lesson completion tracking per user.
+7. **User Authentication**: Firebase Auth integration for secure user sessions.
+8. **Multi-Provider LLM Support**: Flexible integration supporting Gemini, Grok, and other providers.
 
 ## 6. Technical Implementation Details
 
 - **Backend**: NestJS
-- **Database**: SQLite with TypeORM
-- **Frontend**: Server-rendered HTML with DaisyUI styling.
-- **LLM Integration**: Direct API calls to a gemini.
-- **Document Processing**: Via gemini-2.0-flash.
+- **Database**: Firebase Firestore (NoSQL document database)
+- **Authentication**: Firebase Authentication
+- **Frontend**: Server-rendered HTML with DaisyUI styling
+- **LLM Integration**: Model-agnostic service supporting multiple providers (Gemini, Grok, etc.)
+- **Document Processing**: Multi-model support with fallback capabilities
+- **Observability**: LangSmith integration for LLM call tracing
 
 ## 7. Technical Architecture (High-Level)
 
@@ -105,98 +116,91 @@ Academic papers often assume significant domain knowledge, creating barriers for
 graph TD
     subgraph "ArXiv Learning Tool Architecture"
         UserBrowser -- HTTP Requests --> NestJS_Backend
+        UserBrowser -- Authentication --> Firebase_Auth
         NestJS_Backend -- Interacts with --> ArXiv_API
-        NestJS_Backend -- Interacts with --> LLM_API
+        NestJS_Backend -- Interacts with --> LLM_Providers
         NestJS_Backend -- Interacts with --> Wikipedia_API
-        NestJS_Backend -- Manages --> SQLite_Database
+        NestJS_Backend -- Manages --> Firebase_Firestore
+        NestJS_Backend -- Validates --> Firebase_Auth
+        LLM_Providers -- Traces to --> LangSmith
+        
+        subgraph "LLM Providers"
+            Gemini_API
+            Grok_API
+            Other_LLM_APIs
+        end
     end
 
     style UserBrowser fill:#c9f,stroke:#333,stroke-width:2px
     style NestJS_Backend fill:#9cf,stroke:#333,stroke-width:2px
     style ArXiv_API fill:#f9c,stroke:#333,stroke-width:2px
-    style LLM_API fill:#f9c,stroke:#333,stroke-width:2px
+    style LLM_Providers fill:#f9c,stroke:#333,stroke-width:2px
     style Wikipedia_API fill:#f9c,stroke:#333,stroke-width:2px
-    style SQLite_Database fill:#cc9,stroke:#333,stroke-width:2px
+    style Firebase_Firestore fill:#cc9,stroke:#333,stroke-width:2px
+    style Firebase_Auth fill:#9c9,stroke:#333,stroke-width:2px
+    style LangSmith fill:#fc9,stroke:#333,stroke-width:2px
 ```
 
-### 7.1 Database Schema (SQLite with TypeORM)
+### 7.1 Database Schema (Firebase Firestore)
 
 ```typescript
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, ManyToOne, OneToMany } from 'typeorm';
+// Firestore Collections and Document Structure
 
-@Entity()
-export class Course {
-  @PrimaryGeneratedColumn()
-  id: number;
-
-  @Column()
-  paperArxivId: string;
-
-  @Column()
-  paperTitle: string;
-
-  @Column()
-  comprehensionLevel: string;
-
-  @CreateDateColumn()
+// Collection: users
+interface User {
+  uid: string;              // Firebase Auth UID
+  email: string;
+  displayName?: string;
   createdAt: Date;
-
-  @OneToMany(() => Module, module => module.course)
-  modules: Module[];
+  lastLoginAt: Date;
 }
 
-@Entity()
-export class Module {
-  @PrimaryGeneratedColumn()
-  id: number;
+// Collection: courses
+interface Course {
+  id: string;               // Auto-generated document ID
+  userId: string;           // Reference to user who created the course
+  paperArxivId: string;
+  paperTitle: string;
+  comprehensionLevel: string;
+  createdAt: Date;
+  updatedAt: Date;
+  modules: Module[];        // Embedded subcollection or array
+}
 
-  @Column()
+// Subcollection: courses/{courseId}/modules
+interface Module {
+  id: string;
   title: string;
-
-  @Column()
   orderIndex: number;
-
-  @ManyToOne(() => Course, course => course.modules)
-  course: Course;
-
-  @OneToMany(() => Lesson, lesson => lesson.module)
-  lessons: Lesson[];
+  lessons: Lesson[];        // Embedded array or subcollection
 }
 
-@Entity()
-export class Lesson {
-  @PrimaryGeneratedColumn()
-  id: number;
-
-  @Column()
+// Subcollection: courses/{courseId}/modules/{moduleId}/lessons
+interface Lesson {
+  id: string;
   title: string;
-
-  @Column('text')
   content: string;
-
-  @Column()
   orderIndex: number;
-
-  @ManyToOne(() => Module, module => module.lessons)
-  module: Module;
-
-  @OneToMany(() => Progress, progress => progress.lesson)
-  progress: Progress[];
+  createdAt: Date;
 }
 
-@Entity()
-export class Progress {
-  @PrimaryGeneratedColumn()
-  id: number;
-
-  @Column()
-  lessonId: number;
-
-  @CreateDateColumn()
+// Collection: progress
+interface Progress {
+  id: string;
+  userId: string;           // Reference to user
+  courseId: string;         // Reference to course
+  lessonId: string;         // Reference to lesson
+  moduleId: string;         // Reference to module
   readAt: Date;
+  completedAt?: Date;
+}
 
-  @ManyToOne(() => Lesson, lesson => lesson.progress)
-  lesson: Lesson;
+// Collection: userPreferences
+interface UserPreferences {
+  userId: string;
+  defaultLLMProvider?: string;
+  theme?: 'light' | 'dark';
+  notifications?: boolean;
 }
 ```
 
@@ -205,13 +209,17 @@ export class Progress {
 ### Phase 1: Core Infrastructure (Week 1)
 
 - NestJS project setup.
+- Firebase Auth integration.
+- Firebase Firestore setup.
 - ArXiv integration.
 - PDF parsing.
 - Basic UI setup.
 
 ### Phase 2: Intelligence Layer (Week 2)
 
-- Concept extraction with an LLM.
+- Model-agnostic LLM service implementation.
+- LangSmith tracing integration.
+- Concept extraction with multiple LLM providers.
 - Self-rated assessment logic.
 - Gap analysis.
 
@@ -220,10 +228,13 @@ export class Progress {
 - Wikipedia integration.
 - Reference parsing.
 - Syllabus generation.
+- User-specific course management.
+- Progress tracking implementation.
 - UI refinement.
 
 ### Phase 4: Testing & Demo Prep (Week 4)
 
-- End-to-end testing.
+- End-to-end testing with Firebase.
 - Performance optimization.
+- Authentication flow testing.
 - Documentation.
