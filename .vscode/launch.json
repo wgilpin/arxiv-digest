@@ -1,53 +1,35 @@
 {
   "version": "0.2.0",
   "configurations": [
+    // This task RUNS the npm script to start the server with the inspector
     {
       "type": "node",
       "request": "launch",
-      "name": "Launch NestJS Debug (Dev Mode)",
-      "runtimeArgs": [
-        "--nolazy",
-        "-r",
-        "ts-node/register",
-        "-r",
-        "tsconfig-paths/register"
-      ],
-      "args": [
-        "${workspaceFolder}/src/main.ts"
-      ],
-      "autoAttachChildProcesses": true,
-      "cwd": "${workspaceFolder}",
-      "internalConsoleOptions": "openOnSessionStart",
-      "skipFiles": [
-        "<node_internals>/**",
-        "${workspaceFolder}/node_modules/**/*.js"
-      ],
-      "envFile": "${workspaceFolder}/.env",
-      "outputCapture": "std",
-      "env": {
-        "NODE_ENV": "development"
-      },
-      "restart": true,
+      "name": "Run NestJS Debug Script",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "start:debug"],
       "console": "integratedTerminal",
-      "preLaunchTask": "${workspaceFolder}:build"
+      "serverReadyAction": {
+        "pattern": "Debugger listening on ws://127.0.0.1:9229",
+        "uriFormat": "%s",
+        "action": "debugWithChrome"
+      }
     },
+    // This task ATTACHES the debugger to the running process
     {
       "type": "node",
-      "request": "launch", 
-      "name": "Launch NestJS with npm start:dev",
-      "runtimeExecutable": "npm",
-      "runtimeArgs": [
-        "run",
-        "start:dev"
-      ],
-      "cwd": "${workspaceFolder}",
-      "console": "integratedTerminal",
-      "internalConsoleOptions": "openOnSessionStart",
-      "envFile": "${workspaceFolder}/.env",
-      "skipFiles": [
-        "<node_internals>/**",
-        "${workspaceFolder}/node_modules/**/*.js"
-      ]
+      "request": "attach",
+      "name": "Attach to NestJS",
+      "port": 9229,
+      "restart": true,
+      "skipFiles": ["<node_internals>/**", "**/node_modules/**"]
+    }
+  ],
+  // This COMPOUND task runs the two configurations above in sequence
+  "compounds": [
+    {
+      "name": "Launch & Attach to NestJS",
+      "configurations": ["Run NestJS Debug Script", "Attach to NestJS"]
     }
   ]
 }
