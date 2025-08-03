@@ -17,13 +17,6 @@ export class GrokProvider implements LLMProvider {
   }
 
   async generateContent(request: LLMRequest): Promise<LLMResponse> {
-    debugLog('Grok provider generating content with request:', {
-      promptLength: request.prompt.length,
-      model: request.model || this.defaultModel,
-      hasSystemPrompt: !!request.systemPrompt,
-      hasFileUpload: !!request.fileUpload
-    });
-
     try {
       if (request.fileUpload) {
         throw new Error('Grok provider does not support file uploads yet');
@@ -61,12 +54,6 @@ export class GrokProvider implements LLMProvider {
       const completion = response.data;
       const content = completion.choices[0].message.content;
 
-      debugLog('Grok provider response received:', {
-        contentLength: content.length,
-        model: request.model || this.defaultModel,
-        usage: completion.usage
-      });
-
       return {
         content,
         model: request.model || this.defaultModel,
@@ -74,6 +61,10 @@ export class GrokProvider implements LLMProvider {
           inputTokens: completion.usage?.prompt_tokens,
           outputTokens: completion.usage?.completion_tokens,
           totalTokens: completion.usage?.total_tokens,
+          // Keep original format for compatibility
+          prompt_tokens: completion.usage?.prompt_tokens,
+          completion_tokens: completion.usage?.completion_tokens,
+          total_tokens: completion.usage?.total_tokens,
         },
       };
     } catch (error) {

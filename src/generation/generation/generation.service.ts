@@ -57,36 +57,17 @@ export class GenerationService {
   private readonly wikipediaCache: WikipediaCache = {};
   private readonly maxCacheSize = 100;
   private readonly cacheExpiryHours = 24;
-  private tokenUsageByModel: Record<string, { inputTokens: number; outputTokens: number; totalTokens: number }> = {};
-
   constructor(
     private readonly llmService: LLMService,
     private readonly modelSelector: ModelSelectorService,
   ) {}
 
   /**
-   * Tracks token usage from an LLM response for a specific model
-   */
-  private trackTokenUsage(result: any, modelName: string): void {
-    const usage = result.usage || result.response?.usageMetadata;
-    if (usage) {
-      if (!this.tokenUsageByModel[modelName]) {
-        this.tokenUsageByModel[modelName] = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
-      }
-      
-      this.tokenUsageByModel[modelName].inputTokens += usage.promptTokenCount || 0;
-      this.tokenUsageByModel[modelName].outputTokens += usage.candidatesTokenCount || 0;
-      this.tokenUsageByModel[modelName].totalTokens += usage.totalTokenCount || 0;
-    }
-  }
-
-  /**
    * Gets the current token usage by model and resets the counters
    */
   getAndResetTokenUsage(): Record<string, { inputTokens: number; outputTokens: number; totalTokens: number }> {
-    const usage = { ...this.tokenUsageByModel };
-    this.tokenUsageByModel = {};
-    return usage;
+    // Delegate to LLM service which now tracks token usage
+    return this.llmService.getAndResetTokenUsage();
   }
 
   /**
@@ -401,7 +382,6 @@ Respond with only "RELEVANT" or "NOT_RELEVANT" followed by a brief reason.
       const result = await this.llmService.generateLesson({
         prompt: validationPrompt,
       });
-      this.trackTokenUsage(result, 'gemini-2.5-flash');
       const response = result.content.trim();
 
       const isRelevant = response.toUpperCase().startsWith('RELEVANT');
@@ -456,7 +436,6 @@ Concept: ${concept}
       const result = await this.llmService.generateLessonTitles({
         prompt,
       });
-      this.trackTokenUsage(result, 'gemini-2.5-flash');
       const response = result.content;
 
       try {
@@ -660,7 +639,6 @@ ${articleContent.slice(0, 5000)}
       const result = await this.llmService.generateLesson({
         prompt,
       });
-      this.trackTokenUsage(result, 'gemini-2.5-flash');
       const response = result.content;
 
       // Parse the structured response
@@ -735,7 +713,6 @@ Use proper Markdown formatting but keep it concise since this is a peripheral co
       const result = await this.llmService.generateLesson({
         prompt,
       });
-      this.trackTokenUsage(result, 'gemini-2.5-flash');
       const response = result.content;
 
       // Parse the structured response
@@ -821,7 +798,6 @@ ${articleContent.slice(0, 8000)} // Use more content for better context
       const result = await this.llmService.generateLesson({
         prompt,
       });
-      this.trackTokenUsage(result, 'gemini-2.5-flash');
       const response = result.content;
 
       // Parse the structured response
@@ -970,7 +946,6 @@ ${paperText.slice(0, 30000)} // Limit to avoid token limits
       const result = await this.llmService.extractConcepts({
         prompt,
       });
-      this.trackTokenUsage(result, 'gemini-2.5-flash');
       const response = result.content;
 
       // Try to parse JSON response (handle markdown code blocks)
@@ -1094,7 +1069,6 @@ Concept: ${concept}
       const result = await this.llmService.generateLessonTitles({
         prompt,
       });
-      this.trackTokenUsage(result, 'gemini-2.5-flash');
       const response = result.content;
 
       try {
@@ -1383,7 +1357,6 @@ Make the content engaging, informative, and approximately 400-600 words.
       const result = await this.llmService.generateLesson({
         prompt,
       });
-      this.trackTokenUsage(result, 'gemini-2.5-flash');
       const response = result.content;
 
       // Parse the structured response

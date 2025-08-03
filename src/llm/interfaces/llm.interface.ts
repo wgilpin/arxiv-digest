@@ -16,9 +16,18 @@ export interface LLMRequest {
 export interface LLMResponse {
   content: string;
   usage?: {
+    // Standard format
     inputTokens?: number;
     outputTokens?: number;
     totalTokens?: number;
+    // Gemini format
+    promptTokenCount?: number;
+    candidatesTokenCount?: number;
+    totalTokenCount?: number;
+    // Grok format  
+    prompt_tokens?: number;
+    completion_tokens?: number;
+    total_tokens?: number;
   };
   model?: string;
 }

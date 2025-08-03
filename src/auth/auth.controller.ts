@@ -128,17 +128,6 @@ export class AuthController {
       appId: process.env.FIREBASE_APP_ID || ''
     };
     
-    debugLog('Firebase config being returned:', {
-      apiKey: config.apiKey ? 'SET' : 'MISSING',
-      authDomain: config.authDomain ? 'SET' : 'MISSING',
-      projectId: config.projectId ? 'SET' : 'MISSING',
-      storageBucket: config.storageBucket ? 'SET' : 'MISSING',
-      messagingSenderId: config.messagingSenderId ? 'SET' : 'MISSING',
-      appId: config.appId ? 'SET' : 'MISSING'
-    });
-    
-    debugLog('Actual projectId value:', config.projectId);
-    
     // Check if critical env vars are missing
     if (!config.apiKey || !config.authDomain || !config.projectId) {
       console.error('Critical Firebase environment variables are missing');

@@ -9,6 +9,7 @@ import { debugLog } from '../common/debug-logger';
 export class LLMService {
   private providers: Map<LLMProviderType, LLMProvider> = new Map();
   private defaultProvider: LLMProviderType = LLMProviderType.GEMINI;
+  private tokenUsageByModel: Record<string, { inputTokens: number; outputTokens: number; totalTokens: number }> = {};
 
   constructor(
     private readonly geminiProvider: GeminiProvider,
@@ -41,7 +42,12 @@ export class LLMService {
 
     try {
       const provider = this.getProvider(providerType);
-      return await provider.generateContent(request);
+      const result = await provider.generateContent(request);
+      
+      // Track token usage
+      this.trackTokenUsage(result, request.model || 'unknown');
+      
+      return result;
     } catch (error) {
       debugLog(`Provider '${targetProvider}' failed, attempting fallback:`, error.message);
       
@@ -123,7 +129,16 @@ export class LLMService {
   }
 
   async extractPdf(request: Omit<LLMRequest, 'model'>): Promise<LLMResponse> {
-    return this.generateContentForUsage(request, ModelUsage.PDF_EXTRACTION);
+    // PDF extraction requires file upload capability, currently only available with Gemini
+    try {
+      return this.generateContentForUsage(request, ModelUsage.PDF_EXTRACTION);
+    } catch (error) {
+      debugLog('PDF extraction failed, this may be due to network issues with Gemini API');
+      
+      // For now, if PDF extraction fails completely, return a fallback response
+      // In a production system, you might want to implement alternative PDF processing
+      throw new Error(`PDF extraction failed: ${error.message}. Please try again later or use a different input method.`);
+    }
   }
 
   async extractConcepts(request: Omit<LLMRequest, 'model'>): Promise<LLMResponse> {
@@ -136,5 +151,45 @@ export class LLMService {
 
   async generateLesson(request: Omit<LLMRequest, 'model'>): Promise<LLMResponse> {
     return this.generateContentForUsage(request, ModelUsage.LESSON_GENERATION);
+  }
+
+  /**
+   * Tracks token usage from an LLM response for a specific model
+   */
+  private trackTokenUsage(result: LLMResponse, modelName: string): void {
+    const usage = result.usage;
+    if (usage) {
+      if (!this.tokenUsageByModel[modelName]) {
+        this.tokenUsageByModel[modelName] = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
+      }
+      
+      // Handle different response formats from different providers
+      const inputTokens = usage.promptTokenCount || usage.inputTokens || usage.prompt_tokens || 0;
+      const outputTokens = usage.candidatesTokenCount || usage.outputTokens || usage.completion_tokens || 0;
+      const totalTokens = usage.totalTokenCount || usage.totalTokens || usage.total_tokens || inputTokens + outputTokens;
+      
+      this.tokenUsageByModel[modelName].inputTokens += inputTokens;
+      this.tokenUsageByModel[modelName].outputTokens += outputTokens;
+      this.tokenUsageByModel[modelName].totalTokens += totalTokens;
+      
+      debugLog(`Token usage tracked for ${modelName}:`, {
+        inputTokens,
+        outputTokens,
+        totalTokens,
+        runningTotal: this.tokenUsageByModel[modelName]
+      });
+    } else {
+      debugLog(`No token usage information available for model: ${modelName}`);
+    }
+  }
+
+  /**
+   * Gets the current token usage by model and resets the counters
+   */
+  getAndResetTokenUsage(): Record<string, { inputTokens: number; outputTokens: number; totalTokens: number }> {
+    const usage = { ...this.tokenUsageByModel };
+    this.tokenUsageByModel = {};
+    debugLog('Token usage retrieved and reset:', usage);
+    return usage;
   }
 }
