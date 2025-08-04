@@ -94,6 +94,7 @@ Key relationships:
 - Database synchronization is enabled, so schema changes auto-apply
 - Comprehensive error handling and fallbacks for all external APIs
 - Main application entry point: `src/main.ts` (runs on port 3000)
+- Run the tests after making changes, before claiming the code works.
 
 ## Environment Variables
 
@@ -101,4 +102,4 @@ Required environment variables:
 ```bash
 GEMINI_API_KEY=your_gemini_api_key_here
 PORT=3000  # Optional, defaults to 3000
-```
+```fix them
