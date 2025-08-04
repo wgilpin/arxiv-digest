@@ -8,7 +8,12 @@ import {
   NotFoundException,
   UseGuards,
   Req,
+  UseInterceptors,
+  UploadedFile,
+  BadRequestException,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { Express } from 'express';
 import { Response, Request } from 'express';
 import { AuthGuard } from '../auth/auth.guard';
 import { ArxivService } from '../arxiv/arxiv.service';
@@ -71,13 +76,15 @@ export class PaperController {
             const cost = courseCosts[course.id || ''] || 0;
             const costDisplay = cost > 0 ? `$${cost.toFixed(2)}` : 'Free';
             
+            const sourceInfo = course.arxivId 
+              ? `ArXiv ID: ${course.arxivId}`
+              : `Source: Uploaded PDF`;
+            
             return `
         <div class="card bg-base-200 shadow-sm mb-4">
           <div class="card-body">
             <h3 class="card-title text-lg">${course.paperTitle}</h3>
-            <p class="text-sm text-gray-600 mb-2">ArXiv ID: ${
-              course.arxivId
-            }</p>
+            <p class="text-sm text-gray-600 mb-2">${sourceInfo}</p>
             <p class="text-sm text-gray-600 mb-2">Created: ${this.formatDate(course.createdAt)}</p>
             <p class="text-sm text-green-600 mb-4">Generation Cost: <span class="font-semibold">${costDisplay}</span></p>
             <div class="card-actions justify-end">
@@ -107,6 +114,96 @@ export class PaperController {
     res.send(html);
   }
 
+
+  @Post('/upload')
+  @UseGuards(AuthGuard)
+  @UseInterceptors(FileInterceptor('pdf'))
+  async createCourseFromUpload(
+    @UploadedFile() file: Express.Multer.File,
+    @Body('title') title: string,
+    @Res() res: Response,
+    @Req() req: Request & { user: { uid: string } }
+  ) {
+    try {
+      if (!file) {
+        throw new BadRequestException('No PDF file uploaded');
+      }
+
+      if (file.mimetype !== 'application/pdf') {
+        throw new BadRequestException('Only PDF files are allowed');
+      }
+
+      if (!title || title.trim().length === 0) {
+        throw new BadRequestException('Paper title is required');
+      }
+
+      const cleanTitle = title.trim();
+      
+      // Extract text from uploaded PDF using LLM service
+      const paperText = await this.arxivService.extractTextFromPdf(file.buffer);
+      
+      // Extract concepts from the paper text
+      const conceptsWithImportance = 
+        await this.generationService.extractConceptsWithImportance(paperText);
+
+      // Capture token usage from concept extraction
+      const tokenUsageByModel = this.generationService.getAndResetTokenUsage();
+
+      // Extract concept names for backward compatibility
+      const extractedConcepts = conceptsWithImportance.map(item => item.concept);
+      
+      // Create importance mapping
+      const conceptImportance: Record<string, { importance: 'central' | 'supporting' | 'peripheral'; reasoning: string }> = {};
+      conceptsWithImportance.forEach(item => {
+        conceptImportance[item.concept] = {
+          importance: item.importance,
+          reasoning: item.reasoning
+        };
+      });
+
+      // Calculate legacy totals for backward compatibility
+      let totalInput = 0, totalOutput = 0, totalTokens = 0;
+      for (const usage of Object.values(tokenUsageByModel)) {
+        totalInput += usage.inputTokens;
+        totalOutput += usage.outputTokens;
+        totalTokens += usage.totalTokens;
+      }
+
+      const courseId = await this.courseRepository.createCourse(req.user.uid, {
+        arxivId: undefined, // No ArXiv ID for uploaded PDFs
+        title: cleanTitle,
+        description: `Learning course for ${cleanTitle}`,
+        paperTitle: cleanTitle,
+        paperAuthors: [], // Could be extracted from PDF metadata if needed
+        paperUrl: undefined, // No URL for uploaded files
+        modules: [],
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        extractedConcepts: extractedConcepts,
+        conceptImportance: conceptImportance,
+        paperContent: paperText,
+        tokenUsageByModel: tokenUsageByModel,
+        inputTokens: totalInput,
+        outputTokens: totalOutput,
+        totalTokens: totalTokens,
+      });
+
+      res.redirect(`/${courseId}/assess`);
+    } catch (error) {
+      if (error instanceof BadRequestException) {
+        const html = TemplateHelper.renderTemplate('error-general.html', {
+          errorMessage: error.message,
+        });
+        res.status(400).send(html);
+      } else {
+        console.error('PDF upload error:', error);
+        const html = TemplateHelper.renderTemplate('error-general.html', {
+          errorMessage: 'Failed to process uploaded PDF. Please try again.',
+        });
+        res.status(500).send(html);
+      }
+    }
+  }
 
   @Post('/')
   @UseGuards(AuthGuard)

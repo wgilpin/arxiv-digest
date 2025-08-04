@@ -32,6 +32,7 @@
     "@nestjs/platform-socket.io": "^11.1.5",
     "@nestjs/websockets": "^11.1.5",
     "@types/cookie-parser": "^1.4.9",
+    "@types/multer": "^2.0.0",
     "axios": "^1.11.0",
     "cheerio": "^1.1.2",
     "cookie-parser": "^1.4.7",
@@ -40,6 +41,7 @@
     "firebaseui": "^6.1.0",
     "langsmith": "^0.3.50",
     "marked": "^4.3.0",
+    "multer": "^2.0.2",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
     "xml2js": "^0.6.2"

@@ -20,6 +20,14 @@
         <div class="card bg-base-100 shadow-xl mb-8">
           <div class="card-body">
             <h2 class="card-title text-2xl mb-4">Create New Course</h2>
+            
+            <!-- Tabs for different input methods -->
+            <div class="tabs tabs-boxed mb-4">
+              <a class="tab tab-active" id="arxivTab" onclick="showArxivForm()">ArXiv Paper</a>
+              <a class="tab" id="uploadTab" onclick="showUploadForm()">Upload PDF</a>
+            </div>
+            
+            <!-- ArXiv Form -->
             <form id="courseForm" action="/" method="POST" class="form-control">
               <div class="flex gap-4">
                 <input type="text" name="arxivId" placeholder="Enter ArXiv ID (e.g., 1706.03762) or ArXiv URL" required class="input input-bordered flex-1">
@@ -28,6 +36,26 @@
                   <span id="loadingSpinner" class="loading loading-spinner loading-sm hidden"></span>
                 </button>
               </div>
+            </form>
+            
+            <!-- PDF Upload Form -->
+            <form id="uploadForm" action="/upload" method="POST" enctype="multipart/form-data" class="form-control hidden">
+              <div class="form-control mb-4">
+                <label class="label">
+                  <span class="label-text">Paper Title</span>
+                </label>
+                <input type="text" name="title" placeholder="Enter the paper title" required class="input input-bordered">
+              </div>
+              <div class="form-control mb-4">
+                <label class="label">
+                  <span class="label-text">Upload PDF</span>
+                </label>
+                <input type="file" name="pdf" accept=".pdf" required class="file-input file-input-bordered w-full">
+              </div>
+              <button type="submit" id="uploadBtn" class="btn btn-primary">
+                <span id="uploadText">Create Course from PDF</span>
+                <span id="uploadSpinner" class="loading loading-spinner loading-sm hidden"></span>
+              </button>
             </form>
             
             <!-- Progress Messages -->
@@ -65,6 +93,22 @@
   </div>
 
   <script>
+    // Tab switching functionality
+    function showArxivForm() {
+      document.getElementById('arxivTab').classList.add('tab-active');
+      document.getElementById('uploadTab').classList.remove('tab-active');
+      document.getElementById('courseForm').classList.remove('hidden');
+      document.getElementById('uploadForm').classList.add('hidden');
+    }
+
+    function showUploadForm() {
+      document.getElementById('uploadTab').classList.add('tab-active');
+      document.getElementById('arxivTab').classList.remove('tab-active');
+      document.getElementById('uploadForm').classList.remove('hidden');
+      document.getElementById('courseForm').classList.add('hidden');
+    }
+
+    // ArXiv form submission handler
     document.getElementById('courseForm').addEventListener('submit', function(e) {
       const submitBtn = document.getElementById('submitBtn');
       const submitText = document.getElementById('submitText');
@@ -78,11 +122,46 @@
       loadingSpinner.classList.remove('hidden');
       progressMessages.classList.remove('hidden');
       
-      // Progress messages
+      // Progress messages for ArXiv
       const messages = [
         'Downloading paper from ArXiv...',
         'Extracting text from PDF...',
         'Analyzing paper content with AI...',
+        'Extracting key concepts...',
+        'Almost done...'
+      ];
+      
+      let messageIndex = 0;
+      const messageInterval = setInterval(() => {
+        if (messageIndex < messages.length) {
+          progressText.textContent = messages[messageIndex];
+          messageIndex++;
+        }
+      }, 15000); // Change message every 15 seconds
+      
+      // Clean up if form submission completes quickly
+      setTimeout(() => clearInterval(messageInterval), 120000); // Stop after 2 minutes
+    });
+
+    // PDF upload form submission handler
+    document.getElementById('uploadForm').addEventListener('submit', function(e) {
+      const uploadBtn = document.getElementById('uploadBtn');
+      const uploadText = document.getElementById('uploadText');
+      const uploadSpinner = document.getElementById('uploadSpinner');
+      const progressMessages = document.getElementById('progressMessages');
+      const progressText = document.getElementById('progressText');
+      
+      // Show loading state
+      uploadBtn.disabled = true;
+      uploadText.classList.add('hidden');
+      uploadSpinner.classList.remove('hidden');
+      progressMessages.classList.remove('hidden');
+      
+      // Progress messages for PDF upload
+      const messages = [
+        'Uploading PDF file...',
+        'Extracting text from PDF with AI...',
+        'Analyzing paper content...',
         'Extracting key concepts...',
         'Almost done...'
       ];

@@ -355,4 +355,41 @@ Return the cleaned, structured text that would be suitable for further analysis.
 
     return Buffer.from(response.data as ArrayBuffer);
   }
+
+  /**
+   * Extracts text from an uploaded PDF buffer using LLM service
+   * @param pdfBuffer The PDF file buffer
+   * @returns A promise that resolves to the extracted text
+   */
+  async extractTextFromPdf(pdfBuffer: Buffer): Promise<string> {
+    try {
+      debugLog('Extracting text from uploaded PDF using LLM service');
+
+      const prompt = `
+Extract and clean the text from this academic paper PDF. 
+Please:
+- Extract all the text content from the PDF
+- Remove page numbers, headers, footers, and formatting artifacts
+- Preserve the logical structure including sections, paragraphs, and important content
+- Make it readable while maintaining all the technical content
+- Ensure mathematical formulas and technical terms are preserved
+
+Return the cleaned, structured text that would be suitable for further analysis.
+`;
+
+      const result = await this.llmService.extractPdf({
+        prompt,
+        fileUpload: {
+          data: pdfBuffer,
+          mimeType: 'application/pdf',
+        },
+      });
+
+      debugLog(`Extracted ${result.content.length} characters from uploaded PDF`);
+      return result.content;
+    } catch (error) {
+      console.error('Error extracting text from uploaded PDF:', error);
+      throw new Error(`Failed to extract text from PDF: ${error.message}`);
+    }
+  }
 }

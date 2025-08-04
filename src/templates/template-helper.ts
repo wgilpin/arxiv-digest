@@ -6,7 +6,12 @@ export class TemplateHelper {
     templatePath: string,
     variables: Record<string, any> = {},
   ): string {
-    const fullPath = path.join(__dirname, templatePath);
+    // In development, load templates from src directory
+    const isDevelopment = process.env.NODE_ENV !== 'production';
+    const baseDir = isDevelopment 
+      ? path.join(process.cwd(), 'src', 'templates')
+      : __dirname;
+    const fullPath = path.join(baseDir, templatePath);
     let template = fs.readFileSync(fullPath, 'utf-8');
 
     // Load and inject common components
@@ -33,7 +38,12 @@ export class TemplateHelper {
 
   private static loadComponent(componentPath: string, variables: Record<string, any> = {}): string {
     try {
-      const fullPath = path.join(__dirname, componentPath);
+      // In development, load templates from src directory
+      const isDevelopment = process.env.NODE_ENV !== 'production';
+      const baseDir = isDevelopment 
+        ? path.join(process.cwd(), 'src', 'templates')
+        : __dirname;
+      const fullPath = path.join(baseDir, componentPath);
       let component = fs.readFileSync(fullPath, 'utf-8');
 
       // Replace variables in component

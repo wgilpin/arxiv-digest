@@ -31,8 +31,8 @@ export interface Course {
   description: string;
   paperTitle: string;
   paperAuthors: string[];
-  paperUrl: string;
-  arxivId: string;
+  paperUrl?: string; // Optional for uploaded PDFs
+  arxivId?: string; // Optional for uploaded PDFs
   modules: Module[];
   createdAt: Date;
   updatedAt: Date;
