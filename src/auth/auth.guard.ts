@@ -1,7 +1,7 @@
 import { Injectable, CanActivate, ExecutionContext, UnauthorizedException, ForbiddenException } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { Response } from 'express';
-import { debugLog } from 'src/common/debug-logger';
+import { debugLog } from '../common/debug-logger';
 
 interface AuthenticatedRequest {
   user?: any;

@@ -5,7 +5,7 @@ import { AuthGuard } from '../../auth/auth.guard';
 import { CourseService } from './course.service';
 import { Course, Lesson, Module } from '../../firestore/interfaces/firestore.interfaces';
 import { TemplateHelper } from '../../templates/template-helper';
-import { debugLog } from 'src/common/debug-logger';
+import { debugLog } from '../../common/debug-logger';
 const { marked } = require('marked');
 
 @Controller('courses')

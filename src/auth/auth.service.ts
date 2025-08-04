@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import * as admin from 'firebase-admin';
-import { debugLog } from 'src/common/debug-logger';
+import { debugLog } from '../common/debug-logger';
 
 @Injectable()
 export class AuthService {

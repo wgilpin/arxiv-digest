@@ -4,7 +4,7 @@ import { ModelCostRepository } from '../../data/repositories/model-cost.reposito
 import { Course, Module, Lesson, ModelCost } from '../../firestore/interfaces/firestore.interfaces';
 import { GenerationService } from '../../generation/generation/generation.service';
 import { CourseGateway } from './course.gateway';
-import { debugLog } from 'src/common/debug-logger';
+import { debugLog } from '../../common/debug-logger';
 
 @Injectable()
 export class CourseService {
@@ -365,15 +365,40 @@ export class CourseService {
         }));
       debugLog(`Found ${previousLessons.length} previous lessons in module for context`);
 
-      // Get the module concept from the course's extracted concepts
-      const moduleConcept = course.extractedConcepts?.[targetModuleIndex] || 'Unknown Concept';
-      const lessonContent = await this.generationService.generateLessonFromExternalSources(
-        moduleConcept,
-        lesson.title,
-        previousLessons,
-        'intermediate', // Default knowledge level for now
-        course.paperContent,
-      );
+      // Get the module concept from the course's extracted concepts or planned concepts
+      const moduleConcept = course.extractedConcepts?.[targetModuleIndex] || 
+                           course.plannedConcepts?.split(',')[targetModuleIndex]?.trim() || 
+                           'Unknown Concept';
+      
+      // Get the actual knowledge level for this concept
+      const knowledgeLevel = course.knowledgeLevels?.[moduleConcept] ?? 0;
+      const knowledgeLevelText = this.getKnowledgeLevelText(knowledgeLevel);
+      
+      debugLog(`Using knowledge level ${knowledgeLevelText} (${knowledgeLevel}) for concept: ${moduleConcept}`);
+
+      // Check if this is a peripheral concept
+      const importance = this.getConceptImportance(course, moduleConcept);
+      
+      let lessonContent;
+      if (importance === 'peripheral') {
+        lessonContent = await this.generationService.generateSummaryLesson(
+          moduleConcept,
+          knowledgeLevelText,
+          course.paperContent,
+        );
+      } else {
+        lessonContent = await this.generationService.generateLessonFromExternalSources(
+          moduleConcept,
+          lesson.title,
+          previousLessons,
+          knowledgeLevelText,
+          course.paperContent,
+        );
+      }
+
+      // Capture token usage from lesson content generation
+      const tokenUsage = this.generationService.getAndResetTokenUsage();
+      await this.updateCourseTokenUsage(userId, courseId, tokenUsage);
 
       // Update the lesson with content
       lesson.content = lessonContent.content;
@@ -414,18 +439,6 @@ export class CourseService {
   }
 
   async prepareNextLesson(userId: string, courseId: string): Promise<void> {
-    const lockKey = `prepare-${courseId}`;
-    let currentLessonId: string | null = null;
-
-    if (this.generationLocks.get(lockKey)) {
-      debugLog(
-        `Lesson preparation already in progress for course ${courseId}`,
-      );
-      return;
-    }
-
-    this.generationLocks.set(lockKey, true);
-
     try {
       const course = await this.courseRepository.findById(userId, courseId);
 
@@ -435,142 +448,32 @@ export class CourseService {
       }
 
       // Find the first lesson without content
-      const allLessons: { lesson: Lesson; moduleIndex: number; lessonIndex: number }[] = [];
       for (let moduleIndex = 0; moduleIndex < (course.modules?.length || 0); moduleIndex++) {
         const module = course.modules[moduleIndex];
         for (let lessonIndex = 0; lessonIndex < (module.lessons?.length || 0); lessonIndex++) {
           const lesson = module.lessons[lessonIndex];
-          allLessons.push({ lesson, moduleIndex, lessonIndex });
+          if (!lesson.content || lesson.content === '') {
+            debugLog(`Found next lesson to prepare: module ${moduleIndex}, lesson ${lessonIndex}`);
+            // Call prepareSpecificLesson for this lesson
+            await this.prepareSpecificLesson(userId, courseId, moduleIndex, lessonIndex);
+            return;
+          }
         }
       }
 
-      // Sort by module order, then lesson order
-      allLessons.sort((a, b) => {
-        const moduleOrderDiff = a.moduleIndex - b.moduleIndex;
-        if (moduleOrderDiff !== 0) return moduleOrderDiff;
-        return a.lessonIndex - b.lessonIndex;
-      });
-
-      debugLog(`Found ${allLessons.length} total lessons for course ${courseId}`);
-      
-      // Find first lesson without content
-      const nextLessonItem = allLessons.find((item) => !item.lesson.content || item.lesson.content === '');
-
-      if (!nextLessonItem) {
-        if (allLessons.length === 0) {
-          debugLog(`No lessons found for course ${courseId} - triggering lesson title generation`);
-          this.generateRemainingLessonTitles(userId, courseId).catch((error) => {
-            console.error('Failed to generate remaining lesson titles:', error);
-          });
-        } else {
-          debugLog(`All ${allLessons.length} lessons have content for course ${courseId}`);
-        }
-        return;
-      }
-
-      const nextLesson = nextLessonItem.lesson;
-      const moduleIndex = nextLessonItem.moduleIndex;
-      const lessonIndex = nextLessonItem.lessonIndex;
-      currentLessonId = `${courseId}-module-${moduleIndex}-lesson-${lessonIndex}`;
-
-      const module = course.modules[moduleIndex];
-      if (!module) {
-        console.error(`Could not find module for index ${moduleIndex}`);
-        return;
-      }
-
-      const moduleConcept = course.plannedConcepts?.split(',')[moduleIndex];
-      if (!moduleConcept) {
-        console.error(`Could not find concept for module ${moduleIndex}`);
-        return;
-      }
-
-      const knowledgeLevel = course.knowledgeLevels?.[moduleConcept] ?? 0;
-      const knowledgeLevelText = this.getKnowledgeLevelText(knowledgeLevel);
-
-      debugLog(
-        `Preparing lesson: ${nextLesson.title} (course ${courseId}, module ${moduleIndex}, lesson ${lessonIndex})`,
-      );
-
-      this.currentGeneratingLessons.add(currentLessonId);
-
-      this.courseGateway.emitGenerationStarted(courseId, 'lesson-content', {
-        lessonId: currentLessonId,
-        lessonTitle: nextLesson.title,
-        moduleOrderIndex: moduleIndex,
-      });
-
-      // Get previous lessons in this module for context
-      const previousLessons = (module.lessons || [])
-        .filter((lesson, idx) => idx < lessonIndex && lesson.content && lesson.content !== '')
-        .map(lesson => ({
-          title: lesson.title,
-          content: lesson.content,
-        }));
-
-      debugLog(`Found ${previousLessons.length} previous lessons in module for context`);
-
-      const importance = this.getConceptImportance(course, moduleConcept);
-      
-      let lessonContent;
-      if (importance === 'peripheral') {
-        lessonContent = await this.generationService.generateSummaryLesson(
-          moduleConcept,
-          knowledgeLevelText,
-          course.paperContent,
-        );
+      // No lessons without content found
+      if (!course.modules || course.modules.length === 0 || 
+          course.modules.every(m => !m.lessons || m.lessons.length === 0)) {
+        debugLog(`No lessons found for course ${courseId} - triggering lesson title generation`);
+        this.generateRemainingLessonTitles(userId, courseId).catch((error) => {
+          console.error('Failed to generate remaining lesson titles:', error);
+        });
       } else {
-        lessonContent = await this.generationService.generateLessonFromExternalSources(
-          moduleConcept,
-          nextLesson.title,
-          previousLessons,
-          knowledgeLevelText,
-          course.paperContent,
-        );
+        const totalLessons = course.modules.reduce((sum, m) => sum + (m.lessons?.length || 0), 0);
+        debugLog(`All ${totalLessons} lessons have content for course ${courseId}`);
       }
-      
-      // Capture token usage from lesson content generation
-      const tokenUsage = this.generationService.getAndResetTokenUsage();
-      await this.updateCourseTokenUsage(userId, courseId, tokenUsage);
-
-      // Update the lesson with content
-      nextLesson.content = lessonContent.content;
-      nextLesson.title = this.cleanLessonTitle(lessonContent.title);
-      
-      // Save the updated lesson
-      debugLog(`Saving lesson to database: ${currentLessonId}`);
-      try {
-        await this.courseRepository.updateLesson(userId, courseId, moduleIndex, lessonIndex, nextLesson);
-        debugLog(`Successfully saved lesson to database: ${currentLessonId}`);
-      } catch (saveError) {
-        console.error(`Failed to save lesson to database: ${currentLessonId}`, saveError);
-        throw saveError; // Re-throw to trigger the outer catch block
-      }
-
-      debugLog(`Lesson content prepared: ${nextLesson.title}`);
-
-      this.currentGeneratingLessons.delete(currentLessonId);
-
-      // Emit WebSocket event for lesson content generated
-      this.courseGateway.emitLessonContentGenerated(
-        courseId,
-        currentLessonId,
-        nextLesson.title,
-        `${courseId}-module-${moduleIndex}`,
-      );
-
-      debugLog(`Emitted lessonContentGenerated event for lesson: ${currentLessonId}`);
-
     } catch (error) {
-      console.error(
-        `Error preparing next lesson for course ${courseId}:`,
-        error,
-      );
-    } finally {
-      this.generationLocks.delete(lockKey);
-      if (currentLessonId) {
-        this.currentGeneratingLessons.delete(currentLessonId);
-      }
+      console.error(`Error preparing next lesson for course ${courseId}:`, error);
     }
   }
 

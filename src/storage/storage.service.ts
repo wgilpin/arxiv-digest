@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as admin from 'firebase-admin';
+import { File } from '@google-cloud/storage';
 
 @Injectable()
 export class FirebaseStorageService {
@@ -43,7 +44,7 @@ export class FirebaseStorageService {
           reject(error);
         });
 
-        stream.on('finish', async () => {
+        stream.on('finish', () => {
           try {
             // Files are kept private by default - only accessible via Firebase Admin SDK
             // This is more secure for PDF and text content
@@ -52,7 +53,7 @@ export class FirebaseStorageService {
             this.logger.log(`Successfully uploaded: ${filePath}`);
             resolve(publicUrl);
           } catch (error) {
-            reject(error);
+            reject(error instanceof Error ? error : new Error(String(error)));
           }
         });
 
@@ -113,7 +114,7 @@ export class FirebaseStorageService {
   /**
    * Get file metadata from Firebase Storage
    */
-  async getFileMetadata(filePath: string): Promise<any> {
+  async getFileMetadata(filePath: string): Promise<{ timeCreated?: string; [key: string]: any }> {
     try {
       const file = this.storage.bucket(this.bucketName).file(filePath);
       const [metadata] = await file.getMetadata();
@@ -134,6 +135,10 @@ export class FirebaseStorageService {
       }
 
       const metadata = await this.getFileMetadata(filePath);
+      if (!metadata.timeCreated) {
+        this.logger.warn(`No timeCreated found for ${filePath}, assuming file is invalid`);
+        return false;
+      }
       const createdTime = new Date(metadata.timeCreated).getTime();
       const ageInHours = (Date.now() - createdTime) / (1000 * 60 * 60);
       

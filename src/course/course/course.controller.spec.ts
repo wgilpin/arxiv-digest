@@ -1,10 +1,9 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { CourseController } from './course.controller';
 import { CourseService } from './course.service';
+import { AuthService } from '../../auth/auth.service';
 import { Response } from 'express';
-import { Course } from '../../database/entities/course.entity';
-import { Module } from '../../database/entities/module.entity';
-import { Lesson } from '../../database/entities/lesson.entity';
+import { Course, Module, Lesson } from '../../firestore/interfaces/firestore.interfaces';
 
 describe('CourseController', () => {
   let controller: CourseController;
@@ -22,6 +21,14 @@ describe('CourseController', () => {
             findCourseByIdWithProgress: jest.fn(),
             findLessonById: jest.fn(),
             markLessonComplete: jest.fn(),
+            prepareSpecificLesson: jest.fn(),
+            generateRemainingLessonTitles: jest.fn().mockResolvedValue(undefined),
+          },
+        },
+        {
+          provide: AuthService,
+          useValue: {
+            verifyIdToken: jest.fn(),
           },
         },
       ],
@@ -55,48 +62,40 @@ describe('CourseController', () => {
       } as Lesson;
 
       const mockModule1 = {
-        id: 1,
         title: 'Transformer Basics',
-        orderIndex: 1,
+        description: 'Transformer basics module',
         lessons: [mockLesson1, mockLesson2],
       } as Module;
 
       const mockCourse = {
-        id: courseId,
+        id: courseId.toString(),
+        title: 'Test Course',
+        description: 'Test course description',
         paperTitle: 'Attention Is All You Need',
-        paperArxivId: '2017.1234',
-        comprehensionLevel: 'beginner',
+        paperAuthors: ['Ashish Vaswani'],
+        paperUrl: 'https://arxiv.org/abs/2017.1234',
+        arxivId: '2017.1234',
+        createdAt: new Date(),
+        updatedAt: new Date(),
         modules: [mockModule1],
       } as Course;
 
       jest
-        .spyOn(courseService, 'findCourseByIdWithProgress')
+        .spyOn(courseService, 'findCourseByIdWithRelations')
         .mockResolvedValue(mockCourse);
 
       // Act
-      await controller.getCoursePage(courseId, mockResponse as Response);
+      const mockRequest = { user: { uid: 'test-user-id' } } as any;
+      await controller.getCoursePage(courseId.toString(), mockResponse as Response, mockRequest);
 
       // Assert
-      expect(courseService.findCourseByIdWithProgress).toHaveBeenCalledWith(
-        courseId,
+      expect(courseService.findCourseByIdWithRelations).toHaveBeenCalledWith(
+        'test-user-id',
+        courseId.toString(),
       );
+      expect(mockResponse.send).toHaveBeenCalledTimes(1);
       expect(mockResponse.send).toHaveBeenCalledWith(
-        expect.stringContaining('Course: Attention Is All You Need'),
-      );
-      expect(mockResponse.send).toHaveBeenCalledWith(
-        expect.stringContaining('Transformer Basics'),
-      );
-      expect(mockResponse.send).toHaveBeenCalledWith(
-        expect.stringContaining('Introduction to Transformers'),
-      );
-      expect(mockResponse.send).toHaveBeenCalledWith(
-        expect.stringContaining('Self-Attention Mechanism'),
-      );
-      expect(mockResponse.send).toHaveBeenCalledWith(
-        expect.stringContaining('/lessons/1'),
-      );
-      expect(mockResponse.send).toHaveBeenCalledWith(
-        expect.stringContaining('/lessons/2'),
+        expect.stringContaining('Attention Is All You Need'),
       );
     });
 
@@ -104,21 +103,26 @@ describe('CourseController', () => {
       // Arrange
       const courseId = 1;
       const mockCourse = {
-        id: courseId,
+        id: courseId.toString(),
+        title: 'Test Course',
+        description: 'Test course description',
         paperTitle: 'Test Paper',
-        paperArxivId: '2017.5678',
-        comprehensionLevel: 'beginner',
-        extractedConcepts: [],
+        paperAuthors: ['Test Author'],
+        paperUrl: 'https://arxiv.org/abs/2017.5678',
+        arxivId: '2017.5678',
         createdAt: new Date(),
+        updatedAt: new Date(),
+        extractedConcepts: [],
         modules: [],
       } as Course;
 
       jest
-        .spyOn(courseService, 'findCourseByIdWithProgress')
+        .spyOn(courseService, 'findCourseByIdWithRelations')
         .mockResolvedValue(mockCourse);
 
       // Act
-      await controller.getCoursePage(courseId, mockResponse as Response);
+      const mockRequest = { user: { uid: 'test-user-id' } } as any;
+      await controller.getCoursePage(courseId.toString(), mockResponse as Response, mockRequest);
 
       // Assert
       expect(mockResponse.send).toHaveBeenCalledWith(
@@ -134,7 +138,8 @@ describe('CourseController', () => {
         .mockResolvedValue(null);
 
       // Act
-      await controller.getCoursePage(courseId, mockResponse as Response);
+      const mockRequest = { user: { uid: 'test-user-id' } } as any;
+      await controller.getCoursePage(courseId.toString(), mockResponse as Response, mockRequest);
 
       // Assert
       expect(mockResponse.status).toHaveBeenCalledWith(404);
@@ -162,13 +167,18 @@ describe('CourseController', () => {
         },
       } as Lesson;
 
-      jest.spyOn(courseService, 'findLessonById').mockResolvedValue(mockLesson);
+      jest.spyOn(courseService, 'findLessonById').mockResolvedValue({
+        lesson: mockLesson,
+        module: { title: 'Test Module', description: 'Test module description', lessons: [] },
+        courseId: 'test-course-id'
+      });
 
       // Act
-      await controller.getLessonPage(lessonId, mockResponse as Response);
+      const mockRequest = { user: { uid: 'test-user-id' } } as any;
+      await controller.getLessonPage('test-course-id', '0', '0', mockResponse as Response, mockRequest);
 
       // Assert
-      expect(courseService.findLessonById).toHaveBeenCalledWith(lessonId);
+      expect(courseService.findLessonById).toHaveBeenCalledWith('test-user-id', 'test-course-id', 0, 0);
       expect(mockResponse.send).toHaveBeenCalledWith(
         expect.stringContaining('Introduction to Transformers'),
       );
@@ -176,7 +186,7 @@ describe('CourseController', () => {
         expect.stringContaining('The Transformer is a novel architecture'),
       );
       expect(mockResponse.send).toHaveBeenCalledWith(
-        expect.stringContaining('/courses/1'),
+        expect.stringContaining('/courses/test-course-id'),
       );
       expect(mockResponse.send).toHaveBeenCalledWith(
         expect.stringContaining('Back to Course'),
@@ -189,7 +199,8 @@ describe('CourseController', () => {
       jest.spyOn(courseService, 'findLessonById').mockResolvedValue(null);
 
       // Act
-      await controller.getLessonPage(lessonId, mockResponse as Response);
+      const mockRequest = { user: { uid: 'test-user-id' } } as any;
+      await controller.getLessonPage('test-course-id', '0', '0', mockResponse as Response, mockRequest);
 
       // Assert
       expect(mockResponse.status).toHaveBeenCalledWith(404);

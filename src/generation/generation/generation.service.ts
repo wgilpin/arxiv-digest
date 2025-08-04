@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { debugLog } from 'src/common/debug-logger';
+import { debugLog } from '../../common/debug-logger';
 import { LLMService } from '../../llm/llm.service';
 import { ModelSelectorService } from '../../llm/model-selector.service';
 

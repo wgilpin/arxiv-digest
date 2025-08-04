@@ -41,6 +41,9 @@ describe('PaperController', () => {
           useValue: {
             createCourseFromPaper: jest.fn(),
             generateSyllabus: jest.fn(),
+            findAllCourses: jest.fn().mockResolvedValue([]),
+            calculateMultipleCoursesCosts: jest.fn().mockResolvedValue({}),
+            deleteCourse: jest.fn(),
           },
         },
         {

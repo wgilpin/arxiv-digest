@@ -7,7 +7,7 @@ interface AuthenticatedRequest extends Request {
 import { AuthService } from './auth.service';
 import { AuthGuard } from './auth.guard';
 import { UserService } from './user.service';
-import { debugLog } from 'src/common/debug-logger';
+import { debugLog } from '../common/debug-logger';
 
 @Controller('auth')
 export class AuthController {

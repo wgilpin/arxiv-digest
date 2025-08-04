@@ -70,14 +70,14 @@ describe('AuthController', () => {
       authService.verifyIdToken.mockResolvedValue(decodedToken);
       userService.findOrCreateUser.mockResolvedValue(user);
 
-      await controller.verifyToken(token, mockResponse);
+      await controller.verifyToken({ token }, mockResponse);
 
       expect(authService.verifyIdToken).toHaveBeenCalledWith(token);
       expect(userService.findOrCreateUser).toHaveBeenCalledWith(decodedToken);
       expect(mockResponse.cookie).toHaveBeenCalledWith('authToken', token, {
         httpOnly: true,
         secure: false, // NODE_ENV !== 'production'
-        maxAge: 3600000,
+        maxAge: 2592000000, // 30 days
       });
       expect(mockResponse.status).toHaveBeenCalledWith(HttpStatus.OK);
       expect(mockResponse.json).toHaveBeenCalledWith({
@@ -95,7 +95,7 @@ describe('AuthController', () => {
       const token = 'invalid-token';
       authService.verifyIdToken.mockRejectedValue(new Error('Invalid token'));
 
-      await controller.verifyToken(token, mockResponse);
+      await controller.verifyToken({ token }, mockResponse);
 
       expect(authService.verifyIdToken).toHaveBeenCalledWith(token);
       expect(userService.findOrCreateUser).not.toHaveBeenCalled();
@@ -124,7 +124,7 @@ describe('AuthController', () => {
       authService.verifyIdToken.mockResolvedValue(decodedToken);
       userService.findOrCreateUser.mockRejectedValue(new Error('Database error'));
 
-      await controller.verifyToken(token, mockResponse);
+      await controller.verifyToken({ token }, mockResponse);
 
       expect(authService.verifyIdToken).toHaveBeenCalledWith(token);
       expect(userService.findOrCreateUser).toHaveBeenCalledWith(decodedToken);

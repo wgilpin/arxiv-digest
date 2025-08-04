@@ -3,7 +3,7 @@ import axios from 'axios';
 import * as xml2js from 'xml2js';
 import { FirebaseStorageService } from '../storage/storage.service';
 import * as cheerio from 'cheerio';
-import { debugLog } from 'src/common/debug-logger';
+import { debugLog } from '../common/debug-logger';
 import { LLMService } from '../llm/llm.service';
 
 @Injectable()

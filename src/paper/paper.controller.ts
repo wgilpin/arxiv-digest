@@ -26,14 +26,14 @@ export class PaperController {
     private readonly courseService: CourseService,
   ) {}
 
-  private formatDate(date: any): string {
+  private formatDate(date: Date | string | number | { toDate: () => Date }): string {
     try {
       if (date instanceof Date) {
         return date.toLocaleDateString();
       }
-      if (date && typeof date.toDate === 'function') {
+      if (date && typeof date === 'object' && 'toDate' in date && typeof date.toDate === 'function') {
         // Firestore Timestamp
-        return date.toDate().toLocaleDateString();
+        return (date as { toDate: () => Date }).toDate().toLocaleDateString();
       }
       if (typeof date === 'string' || typeof date === 'number') {
         const parsedDate = new Date(date);
@@ -50,7 +50,7 @@ export class PaperController {
     }
   }
 
-  private escapeJavaScript(str: any): string {
+  private escapeJavaScript(str: string | null | undefined): string {
     if (str == null) return '';
     return String(str).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '\\"');
   }
