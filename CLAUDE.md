@@ -102,4 +102,8 @@ Required environment variables:
 ```bash
 GEMINI_API_KEY=your_gemini_api_key_here
 PORT=3000  # Optional, defaults to 3000
-```fix them
+```
+
+## Development Guidelines
+
+- Do not add comments describing changes. Only add comments explaining current functionality.

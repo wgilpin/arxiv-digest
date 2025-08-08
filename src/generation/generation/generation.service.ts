@@ -1528,9 +1528,9 @@ Make the content engaging, informative, and approximately 200-350 words (2-3 min
         return [];
       }
 
-      // Use LLM to select relevant figures
+      // Use LLM to select relevant figures with stricter criteria
       const prompt = `
-Analyze this lesson about "${lessonTopic}" and determine which figures from the research paper would be DIRECTLY RELEVANT and helpful for understanding THIS SPECIFIC LESSON.
+Analyze this lesson about "${lessonTopic}" and determine which figures from the research paper would be ABSOLUTELY ESSENTIAL and DIRECTLY RELEVANT for understanding THIS SPECIFIC LESSON.
 
 Lesson Content:
 ${lessonContent.slice(0, 2000)}
@@ -1538,17 +1538,24 @@ ${lessonContent.slice(0, 2000)}
 Available Figures:
 ${allFigures.map((fig, idx) => `${idx + 1}. Figure ${fig.figureNumber || idx + 1}: ${fig.caption}`).join('\n')}
 
-IMPORTANT CRITERIA - A figure should ONLY be selected if:
-1. The lesson content specifically discusses concepts directly illustrated by the figure
-2. The figure would help the student understand the specific topic being taught
-3. There are clear connections between lesson content and what the figure shows
+STRICT SELECTION CRITERIA - A figure should ONLY be selected if ALL of these conditions are met:
+1. The lesson content explicitly mentions or directly references concepts shown in the figure
+2. The figure is ESSENTIAL for understanding the core concept being taught (not just supplementary)
+3. The lesson would be significantly less clear or incomplete without this specific figure
+4. The figure directly illustrates a key point made in the lesson text
+5. Students would struggle to understand the lesson topic without seeing this figure
 
-Be VERY SELECTIVE - most lessons should have 0 figures. Only select 1-2 figures that are truly essential for understanding THIS lesson.
+EXTREMELY RESTRICTIVE GUIDELINES:
+- Default assumption: NO figures are needed (most lessons should return [])
+- Only select a figure if it's absolutely critical for comprehension
+- Avoid figures that are merely tangentially related or "nice to have"
+- Do not select figures just for visual appeal or general context
+- Maximum 1 figure per lesson (prefer 0)
 
 Return ONLY a JSON array of figure indices (1-based):
-- If NO figures are directly relevant: []
-- If some figures are relevant: [1] or [2, 3]
-- Do NOT include figures just because they're from the same paper
+- If NO figures are absolutely essential: []
+- If exactly one figure is essential: [X]
+- Do NOT include multiple figures unless each one is individually critical
 `;
 
       const result = await this.llmService.generateLesson({ prompt });
@@ -1573,17 +1580,25 @@ Return ONLY a JSON array of figure indices (1-based):
           }
           const usedFigures = this.figureUsageTracker.get(arxivId)!;
           
-          // Filter out figures that have been used too many times (more than 2 times)
+          // Enhanced deduplication: track usage counts and apply stricter limits
           const figureUsageCounts = new Map<string, number>();
           usedFigures.forEach(figId => {
             figureUsageCounts.set(figId, (figureUsageCounts.get(figId) || 0) + 1);
           });
           
-          candidateFigures = candidateFigures.filter(fig => 
-            (figureUsageCounts.get(fig.id) || 0) < 2
-          );
+          // Much stricter filtering: only allow each figure to be used once
+          candidateFigures = candidateFigures.filter(fig => {
+            const usageCount = figureUsageCounts.get(fig.id) || 0;
+            const isAlreadyUsed = usageCount > 0;
+            
+            if (isAlreadyUsed) {
+              debugLog(`Filtering out Figure ${fig.figureNumber} - already used ${usageCount} time(s)`);
+            }
+            
+            return !isAlreadyUsed;
+          });
           
-          // Select final figures (max 1 per lesson to be more conservative)
+          // Select final figures (max 1 per lesson, prefer 0)
           const selectedFigures = candidateFigures.slice(0, 1);
           
           // Track usage
