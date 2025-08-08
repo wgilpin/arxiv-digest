@@ -70,18 +70,28 @@
     .lesson-figure {
       margin: 2rem 0;
       text-align: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
     }
     .lesson-figure img {
       max-width: 100%;
       height: auto;
       border-radius: 0.5rem;
       box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+      margin-bottom: 0.75rem;
     }
-    .lesson-figure figcaption {
-      margin-top: 0.75rem;
+    .lesson-figure .figure-caption {
       font-size: 0.875rem;
-      color: #6b7280;
-      font-style: italic;
+      color: #4b5563;
+      text-align: left;
+      max-width: 100%;
+      line-height: 1.5;
+      padding: 0 1rem;
+    }
+    .lesson-figure .figure-caption strong {
+      color: #1f2937;
+      font-weight: 600;
     }
     
     /* Navigation button styles */

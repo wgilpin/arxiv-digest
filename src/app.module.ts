@@ -7,6 +7,7 @@ import { PaperModule } from './paper/paper.module';
 import { GenerationModule } from './generation/generation.module';
 import { CourseModule } from './course/course.module';
 import { AuthModule } from './auth/auth.module';
+import { DebugModule } from './debug/debug.module';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { AuthModule } from './auth/auth.module';
     GenerationModule,
     CourseModule,
     AuthModule,
+    DebugModule,
   ],
   controllers: [],
   providers: [],

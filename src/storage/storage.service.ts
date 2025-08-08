@@ -44,15 +44,33 @@ export class FirebaseStorageService {
           reject(error);
         });
 
-        stream.on('finish', () => {
+        stream.on('finish', async () => {
           try {
-            // Files are kept private by default - only accessible via Firebase Admin SDK
-            // This is more secure for PDF and text content
+            // For image files, make them publicly accessible
+            const isImage = /\.(png|jpg|jpeg|gif|webp)$/i.test(filePath);
             
-            const publicUrl = `https://storage.googleapis.com/${this.bucketName}/${filePath}`;
-            this.logger.log(`Successfully uploaded: ${filePath}`);
-            resolve(publicUrl);
+            if (isImage) {
+              try {
+                // Make the file publicly accessible
+                await file.makePublic();
+                const publicUrl = `https://storage.googleapis.com/${this.bucketName}/${filePath}`;
+                this.logger.log(`Successfully uploaded public image: ${filePath}`);
+                resolve(publicUrl);
+              } catch (publicError) {
+                // If making public fails, just return the storage URL
+                // The file might already be public or there might be permission issues
+                this.logger.warn(`Could not make file public, using storage URL: ${filePath}`, publicError);
+                const publicUrl = `https://storage.googleapis.com/${this.bucketName}/${filePath}`;
+                resolve(publicUrl);
+              }
+            } else {
+              // For non-image files, just return a simple URL (skip signed URL generation for now)
+              const publicUrl = `https://storage.googleapis.com/${this.bucketName}/${filePath}`;
+              this.logger.log(`Successfully uploaded file: ${filePath}`);
+              resolve(publicUrl);
+            }
           } catch (error) {
+            this.logger.error(`Error finalizing upload for ${filePath}:`, error);
             reject(error instanceof Error ? error : new Error(String(error)));
           }
         });
@@ -112,6 +130,33 @@ export class FirebaseStorageService {
   }
 
   /**
+   * Get a public URL for an existing file
+   */
+  async getPublicUrl(filePath: string): Promise<string> {
+    try {
+      const file = this.storage.bucket(this.bucketName).file(filePath);
+      const isImage = /\.(png|jpg|jpeg|gif|webp)$/i.test(filePath);
+      
+      if (isImage) {
+        try {
+          // Try to ensure the file is public
+          await file.makePublic();
+        } catch (error) {
+          // If making public fails, continue anyway
+          this.logger.warn(`Could not make file public: ${filePath}`, error);
+        }
+        return `https://storage.googleapis.com/${this.bucketName}/${filePath}`;
+      } else {
+        // For non-image files, just return the storage URL
+        return `https://storage.googleapis.com/${this.bucketName}/${filePath}`;
+      }
+    } catch (error) {
+      this.logger.error(`Error getting public URL for ${filePath}:`, error);
+      throw error;
+    }
+  }
+
+  /**
    * Get file metadata from Firebase Storage
    */
   async getFileMetadata(filePath: string): Promise<{ timeCreated?: string; [key: string]: any }> {
@@ -159,6 +204,28 @@ export class FirebaseStorageService {
       this.logger.log(`Successfully deleted: ${filePath}`);
     } catch (error) {
       this.logger.error(`Failed to delete ${filePath}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Delete all files in a folder
+   */
+  async deleteFolderContents(folderPath: string): Promise<void> {
+    try {
+      const [files] = await this.storage.bucket(this.bucketName).getFiles({
+        prefix: folderPath.endsWith('/') ? folderPath : `${folderPath}/`,
+      });
+      
+      if (files.length === 0) {
+        this.logger.log(`No files found in folder: ${folderPath}`);
+        return;
+      }
+      
+      await Promise.all(files.map(file => file.delete()));
+      this.logger.log(`Successfully deleted ${files.length} files from folder: ${folderPath}`);
+    } catch (error) {
+      this.logger.error(`Failed to delete folder contents ${folderPath}:`, error);
       throw error;
     }
   }

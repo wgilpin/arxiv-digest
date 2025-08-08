@@ -494,12 +494,12 @@ export class CourseController {
     let lessonFigures = '';
     if (lesson.figures && lesson.figures.length > 0) {
       lessonFigures = lesson.figures.map((figure, idx) => `
-        <figure class="lesson-figure" id="figure-${idx + 1}">
+        <div class="lesson-figure" id="figure-${idx + 1}">
           <img src="${figure.imageUrl}" alt="${figure.caption}" loading="lazy">
-          <figcaption>
+          <div class="figure-caption">
             <strong>Figure ${figure.figureNumber || idx + 1}:</strong> ${figure.caption}
-          </figcaption>
-        </figure>
+          </div>
+        </div>
       `).join('\n');
     }
 

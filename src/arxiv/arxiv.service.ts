@@ -402,16 +402,37 @@ Return the cleaned, structured text that would be suitable for further analysis.
   }
 
   /**
+   * Forces re-extraction of figures by clearing cache
+   * @param arxivId The ArXiv ID of the paper
+   */
+  async clearFigureCache(arxivId: string): Promise<void> {
+    try {
+      // Delete entire figures folder for this paper
+      const figuresFolderPath = `arxiv/figures/${arxivId}`;
+      await this.storageService.deleteFolderContents(figuresFolderPath);
+      debugLog(`Cleared all figure cache for ArXiv ID: ${arxivId}`);
+    } catch (error) {
+      console.error(`Error clearing figure cache for ArXiv ID ${arxivId}:`, error);
+    }
+  }
+
+  /**
    * Gets extracted figures for a paper
    * @param arxivId The ArXiv ID of the paper
+   * @param forceRefresh Force re-extraction even if cached figures exist
    * @returns A promise that resolves to the extracted figures
    */
-  async getExtractedFigures(arxivId: string): Promise<ExtractedFigure[]> {
+  async getExtractedFigures(arxivId: string, forceRefresh: boolean = false): Promise<ExtractedFigure[]> {
     try {
       const paths = this.getArxivStoragePaths(arxivId);
       
-      // Check if we have cached figures
-      if (await this.storageService.fileExists(paths.figures)) {
+      // Clear cache if force refresh is requested
+      if (forceRefresh) {
+        await this.clearFigureCache(arxivId);
+      }
+      
+      // Check if we have cached figures (unless force refresh)
+      if (!forceRefresh && await this.storageService.fileExists(paths.figures)) {
         const figuresJson = await this.storageService.downloadText(paths.figures);
         return JSON.parse(figuresJson) as ExtractedFigure[];
       }

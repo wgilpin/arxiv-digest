@@ -3,6 +3,7 @@ import * as cheerio from 'cheerio';
 import { PDFDocument } from 'pdf-lib';
 import * as sharp from 'sharp';
 import { v4 as uuidv4 } from 'uuid';
+import axios from 'axios';
 import { FirebaseStorageService } from '../storage/storage.service';
 import { LLMService } from '../llm/llm.service';
 import { debugLog } from '../common/debug-logger';
@@ -39,7 +40,7 @@ export class FigureExtractionService {
       // Prefer HTML extraction if available
       if (htmlContent) {
         debugLog(`Extracting figures from HTML for ArXiv ID: ${arxivId}`);
-        figures = await this.extractFiguresFromHtml(arxivId, htmlContent);
+        figures = this.extractFiguresFromHtml(arxivId, htmlContent);
         extractionMethod = 'html';
       }
 
@@ -65,7 +66,7 @@ export class FigureExtractionService {
       };
     } catch (error) {
       console.error(`Error extracting figures for ArXiv ID ${arxivId}:`, error);
-      errors.push(error.message);
+      errors.push(error instanceof Error ? error.message : String(error));
       return {
         figures: [],
         totalFound: 0,
@@ -78,10 +79,10 @@ export class FigureExtractionService {
   /**
    * Extracts figures from HTML content using cheerio
    */
-  private async extractFiguresFromHtml(
+  private extractFiguresFromHtml(
     arxivId: string,
     htmlContent: string,
-  ): Promise<ExtractedFigure[]> {
+  ): ExtractedFigure[] {
     const $ = cheerio.load(htmlContent);
     const figures: ExtractedFigure[] = [];
 
@@ -114,7 +115,13 @@ export class FigureExtractionService {
 
         // If it's a relative URL, convert to absolute
         if (imgSrc && !imgSrc.startsWith('http') && figure.metadata) {
-          figure.metadata.originalUrl = `https://arxiv.org${imgSrc}`;
+          // ArXiv HTML image URLs are relative to the HTML version URL
+          figure.metadata.originalUrl = `https://arxiv.org/html/${arxivId}/${imgSrc}`;
+          debugLog(`Converted relative URL '${imgSrc}' to '${figure.metadata.originalUrl}'`);
+        } else if (imgSrc) {
+          debugLog(`Using absolute URL: ${imgSrc}`);
+        } else {
+          debugLog(`No image source found for figure`);
         }
 
         figures.push(figure);
@@ -134,6 +141,8 @@ export class FigureExtractionService {
         const figureNumberMatch = captionText.match(/Figure\s*(\d+\.?\d*)/i);
         const figureNumber = figureNumberMatch ? figureNumberMatch[1] : `${figures.length + 1}`;
 
+        const absoluteUrl = imgSrc?.startsWith('http') ? imgSrc : `https://arxiv.org/html/${arxivId}/${imgSrc}`;
+        
         figures.push({
           id: uuidv4(),
           arxivId,
@@ -142,7 +151,7 @@ export class FigureExtractionService {
           type: this.determineFigureType(captionText, ''),
           metadata: {
             extractionMethod: 'html',
-            originalUrl: imgSrc?.startsWith('http') ? imgSrc : `https://arxiv.org${imgSrc}`,
+            originalUrl: absoluteUrl,
           },
         });
       }
@@ -197,7 +206,7 @@ export class FigureExtractionService {
   ): Promise<{ figures: ExtractedFigure[] }> {
     try {
       // Convert PDF page to image
-      const pageImage = await this.renderPdfPageToImage(pdfBuffer, pageNumber);
+      const pageImage = this.renderPdfPageToImage(pdfBuffer, pageNumber);
       if (!pageImage) {
         return { figures: [] };
       }
@@ -267,10 +276,10 @@ If no figures are found, return: {"figures": []}`;
   /**
    * Renders a PDF page to an image buffer
    */
-  private async renderPdfPageToImage(
+  private renderPdfPageToImage(
     pdfBuffer: Buffer,
     pageNumber: number,
-  ): Promise<Buffer | null> {
+  ): Buffer | null {
     try {
       // For now, we'll use the entire PDF for vision analysis
       // In production, you'd want to use a proper PDF rendering library
@@ -329,39 +338,61 @@ If no figures are found, return: {"figures": []}`;
         try {
           let imageBuffer: Buffer | undefined;
 
-          // If we have an original URL (from HTML), download it
+          // If we have an original URL (from HTML), try to download it
           if (figure.metadata?.originalUrl && !figure.imageBuffer) {
+            debugLog(`Attempting to download image from: ${figure.metadata.originalUrl}`);
             imageBuffer = await this.downloadImage(figure.metadata.originalUrl);
+            
+            if (!imageBuffer) {
+              debugLog(`Failed to download image, figure will be included without image`);
+            }
           }
           // If we have a buffer and bounding box, crop it
           else if (figure.imageBuffer && figure.boundingBox) {
+            debugLog(`Cropping image with bounding box`);
             imageBuffer = await this.cropFigureFromImage(figure.imageBuffer, figure.boundingBox);
           }
           // Otherwise use the buffer as-is
           else if (figure.imageBuffer) {
+            debugLog(`Using image buffer as-is`);
             imageBuffer = figure.imageBuffer;
           }
 
           if (imageBuffer) {
             const storagePath = `arxiv/figures/${figure.arxivId}/${figure.id}.png`;
-            const imageUrl = await this.storageService.uploadBuffer(storagePath, imageBuffer, {
-              arxivId: figure.arxivId,
-              figureNumber: figure.figureNumber || 'unknown',
-              caption: figure.caption.slice(0, 200), // Limit caption length for metadata
-            });
+            debugLog(`Uploading image to storage: ${storagePath}`);
+            
+            try {
+              const imageUrl = await this.storageService.uploadBuffer(storagePath, imageBuffer, {
+                arxivId: figure.arxivId,
+                figureNumber: figure.figureNumber || 'unknown',
+                caption: figure.caption.slice(0, 200), // Limit caption length for metadata
+              });
 
-            // Remove buffer from returned object to save memory
-            const { imageBuffer: _, ...figureWithoutBuffer } = figure;
-            return {
-              ...figureWithoutBuffer,
-              imageUrl,
-            };
+              debugLog(`Successfully uploaded image: ${imageUrl}`);
+              
+              // Remove buffer from returned object to save memory
+              const { imageBuffer: _, ...figureWithoutBuffer } = figure;
+              return {
+                ...figureWithoutBuffer,
+                imageUrl,
+              };
+            } catch (uploadError) {
+              console.error(`Error uploading figure ${figure.id} to storage:`, uploadError);
+              // Return figure without imageUrl rather than failing completely
+              const { imageBuffer: _, ...figureWithoutBuffer } = figure;
+              return figureWithoutBuffer;
+            }
           }
 
-          return figure;
+          // Return figure even if we couldn't process the image
+          const { imageBuffer: _, ...figureWithoutBuffer } = figure;
+          return figureWithoutBuffer;
         } catch (error) {
-          console.error(`Error storing figure ${figure.id}:`, error);
-          return figure;
+          console.error(`Error processing figure ${figure.id}:`, error);
+          // Return figure without imageBuffer to avoid memory issues
+          const { imageBuffer: _, ...figureWithoutBuffer } = figure;
+          return figureWithoutBuffer;
         }
       }),
     );
@@ -374,14 +405,40 @@ If no figures are found, return: {"figures": []}`;
    */
   private async downloadImage(url: string): Promise<Buffer | undefined> {
     try {
-      const response = await fetch(url);
-      if (!response.ok) {
-        throw new Error(`Failed to download image: ${response.statusText}`);
+      debugLog(`Attempting to download image from: ${url}`);
+      
+      const response = await axios.get(url, {
+        responseType: 'arraybuffer',
+        timeout: 30000, // 30 seconds
+        headers: {
+          'User-Agent': 'ArXivLearningTool/1.0 (Educational Purpose)',
+          'Accept': 'image/png,image/jpeg,image/gif,image/webp,image/*,*/*;q=0.8'
+        },
+        maxContentLength: 50 * 1024 * 1024, // 50MB max
+      });
+      
+      if (response.status !== 200) {
+        debugLog(`Image download failed with status ${response.status}: ${response.statusText}`);
+        return undefined;
       }
-      const arrayBuffer = await response.arrayBuffer();
-      return Buffer.from(arrayBuffer);
+      
+      const buffer = Buffer.from(response.data);
+      debugLog(`Successfully downloaded image: ${buffer.length} bytes`);
+      return buffer;
+      
     } catch (error) {
-      console.error(`Error downloading image from ${url}:`, error);
+      if (axios.isAxiosError(error)) {
+        if (error.code === 'ECONNABORTED') {
+          console.error(`Image download timeout for ${url}`);
+        } else if (error.response) {
+          console.error(`Image download failed with status ${error.response.status}: ${url}`);
+        } else {
+          console.error(`Image download network error for ${url}:`, error.message);
+        }
+      } else {
+        console.error(`Error downloading image from ${url}:`, error);
+      }
+      debugLog(`Will continue without this image`);
       return undefined;
     }
   }
@@ -398,8 +455,8 @@ If no figures are found, return: {"figures": []}`;
         jsonString = jsonMatch[0];
       }
 
-      const result = JSON.parse(jsonString);
-      return result as VisionAnalysisResult;
+      const result = JSON.parse(jsonString) as VisionAnalysisResult;
+      return result;
     } catch (error) {
       console.error('Error parsing vision response:', error);
       return { figures: [] };
