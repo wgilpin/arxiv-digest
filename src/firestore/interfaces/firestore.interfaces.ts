@@ -7,10 +7,25 @@ export interface User {
   updatedAt?: Date;
 }
 
+export interface Figure {
+  id: string;
+  arxivId?: string;
+  figureNumber?: string;
+  caption: string;
+  type: 'chart' | 'diagram' | 'table' | 'equation' | 'image' | 'unknown';
+  imageUrl?: string;
+  pageNumber?: number;
+  metadata?: {
+    extractionMethod: 'html' | 'pdf-vision' | 'pdf-embedded';
+    confidence?: number;
+  };
+}
+
 export interface Lesson {
   title: string;
   content: string;
   completedAt?: Date;
+  figures?: Figure[];
 }
 
 export interface Module {
@@ -42,6 +57,7 @@ export interface Course {
   plannedConcepts?: string;
   knowledgeLevels?: Record<string, number>;
   tokenUsageByModel?: Record<string, ModelTokenUsage>;
+  figures?: Figure[];
   // Legacy fields for backward compatibility
   inputTokens?: number;
   outputTokens?: number;

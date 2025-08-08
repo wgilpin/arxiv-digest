@@ -2,6 +2,8 @@ import { Injectable } from '@nestjs/common';
 import { debugLog } from '../../common/debug-logger';
 import { LLMService } from '../../llm/llm.service';
 import { ModelSelectorService } from '../../llm/model-selector.service';
+import { ArxivService } from '../../arxiv/arxiv.service';
+import { Figure } from '../../firestore/interfaces/firestore.interfaces';
 
 // Wikipedia integration interfaces
 interface WikipediaSearchResult {
@@ -60,6 +62,7 @@ export class GenerationService {
   constructor(
     private readonly llmService: LLMService,
     private readonly modelSelector: ModelSelectorService,
+    private readonly arxivService: ArxivService,
   ) {}
 
   /**
@@ -753,7 +756,7 @@ Use proper Markdown formatting but keep it concise since this is a peripheral co
       title: string;
       url: string;
     }
-  ): Promise<{ title: string; content: string }> {
+  ): Promise<{ title: string; content: string; figures?: Figure[] }> {
     try {
       // Generate the base prompt
       const basePrompt = this.generateFocusedLessonPrompt(
@@ -841,7 +844,8 @@ IMPORTANT: You must include this attribution at the end of your lesson:
     previousLessons?: Array<{ title: string; content: string }>,
     knowledgeLevel?: string,
     paperContent?: string,
-  ): Promise<{ title: string; content: string }> {
+    arxivId?: string,
+  ): Promise<{ title: string; content: string; figures?: Figure[] }> {
     // Always use the broader concept for Wikipedia search, not the specific lesson topic
     const searchQuery = concept;
     const lessonTopic = topic || concept;
@@ -871,6 +875,14 @@ IMPORTANT: You must include this attribution at the end of your lesson:
           }
         );
         
+        // Add relevant figures if arxivId is provided
+        if (arxivId) {
+          const figures = await this.selectRelevantFigures(arxivId, lessonTopic, lesson.content);
+          if (figures.length > 0) {
+            return { ...lesson, figures };
+          }
+        }
+        
         debugLog(`Successfully generated lesson from Wikipedia for: ${searchQuery}`);
         return lesson;
       }
@@ -893,6 +905,14 @@ IMPORTANT: You must include this attribution at the end of your lesson:
         paperContent
         // No Wikipedia source for pure LLM generation
       );
+      
+      // Add relevant figures if arxivId is provided
+      if (arxivId) {
+        const figures = await this.selectRelevantFigures(arxivId, lessonTopic, fallbackLesson.content);
+        if (figures.length > 0) {
+          return { ...fallbackLesson, figures };
+        }
+      }
       
       debugLog(`Successfully generated lesson using LLM fallback for: ${searchQuery}`);
       return fallbackLesson;
@@ -1360,5 +1380,68 @@ Make the content engaging, informative, and approximately 200-350 words (2-3 min
     );
     
     return result;
+  }
+
+  /**
+   * Selects figures relevant to a specific lesson topic
+   */
+  private async selectRelevantFigures(
+    arxivId: string,
+    lessonTopic: string,
+    lessonContent: string,
+  ): Promise<Figure[]> {
+    try {
+      // Get all figures for the paper
+      const allFigures = await this.arxivService.getExtractedFigures(arxivId);
+      
+      if (allFigures.length === 0) {
+        return [];
+      }
+
+      // Use LLM to select relevant figures
+      const prompt = `
+Given the following lesson about "${lessonTopic}" and a list of figures from the research paper, select which figures would be most relevant to include in this lesson.
+
+Lesson Content:
+${lessonContent.slice(0, 2000)}
+
+Available Figures:
+${allFigures.map((fig, idx) => `${idx + 1}. Figure ${fig.figureNumber || idx + 1}: ${fig.caption}`).join('\n')}
+
+Select up to 2-3 figures that would best illustrate or support the lesson content. Consider:
+- Direct relevance to the lesson topic
+- Educational value for understanding the concept
+- Whether the figure helps clarify complex ideas
+
+Return ONLY a JSON array of figure indices (1-based) that should be included:
+Example: [1, 3] or [] if no figures are relevant
+`;
+
+      const result = await this.llmService.generateLesson({ prompt });
+      
+      try {
+        // Parse the response to get figure indices
+        const jsonMatch = result.content.match(/\[\s*\d*(?:\s*,\s*\d+)*\s*\]/);
+        if (jsonMatch) {
+          const indices = JSON.parse(jsonMatch[0]) as number[];
+          
+          // Convert indices to figures (adjust for 0-based array)
+          const selectedFigures = indices
+            .map(idx => allFigures[idx - 1])
+            .filter(fig => fig !== undefined)
+            .slice(0, 3); // Limit to 3 figures max
+          
+          debugLog(`Selected ${selectedFigures.length} figures for lesson "${lessonTopic}"`);
+          return selectedFigures;
+        }
+      } catch (error) {
+        console.error('Error parsing figure selection:', error);
+      }
+      
+      return [];
+    } catch (error) {
+      console.error(`Error selecting figures for lesson:`, error);
+      return [];
+    }
   }
 }

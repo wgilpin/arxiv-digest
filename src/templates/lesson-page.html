@@ -66,6 +66,24 @@
       line-height: 1.6;
     }
     
+    /* Figure styles */
+    .lesson-figure {
+      margin: 2rem 0;
+      text-align: center;
+    }
+    .lesson-figure img {
+      max-width: 100%;
+      height: auto;
+      border-radius: 0.5rem;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    }
+    .lesson-figure figcaption {
+      margin-top: 0.75rem;
+      font-size: 0.875rem;
+      color: #6b7280;
+      font-style: italic;
+    }
+    
     /* Navigation button styles */
     .lesson-nav-btn {
       max-width: 300px;
@@ -103,7 +121,12 @@
 
     <h1 class="text-3xl font-bold mb-4">{{lessonTitle}}</h1>
     <div class="card bg-base-100 shadow-xl p-8 mb-4">
-      <div class="prose max-w-none">{{lessonContent}}</div>
+      <div class="prose max-w-none">
+        {{lessonContent}}
+        
+        <!-- Figures -->
+        {{lessonFigures}}
+      </div>
     </div>
     
     <!-- Navigation buttons -->

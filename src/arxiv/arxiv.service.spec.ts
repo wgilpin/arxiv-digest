@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { ArxivService } from './arxiv.service';
 import { FirebaseStorageService } from '../storage/storage.service';
 import { LLMService } from '../llm/llm.service';
+import { FigureExtractionService } from '../figure-extraction/figure-extraction.service';
 import * as fs from 'fs';
 import * as path from 'path';
 import axios from 'axios';
@@ -49,6 +50,10 @@ describe('ArxivService', () => {
       generateContent: jest.fn(),
       cleanPdfText: jest.fn(),
     };
+    
+    const mockFigureExtractionService = {
+      extractFigures: jest.fn().mockResolvedValue({ figures: [], totalFound: 0, extractionMethod: 'html' }),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -60,6 +65,10 @@ describe('ArxivService', () => {
         {
           provide: LLMService,
           useValue: mockLLMService,
+        },
+        {
+          provide: FigureExtractionService,
+          useValue: mockFigureExtractionService,
         },
       ],
     }).compile();

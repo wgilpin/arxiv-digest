@@ -1,7 +1,7 @@
 import { Injectable, Inject, forwardRef } from '@nestjs/common';
 import { CourseRepository } from '../../data/repositories/course.repository';
 import { ModelCostRepository } from '../../data/repositories/model-cost.repository';
-import { Course, Module, Lesson, ModelCost } from '../../firestore/interfaces/firestore.interfaces';
+import { Course, Module, Lesson, ModelCost, Figure } from '../../firestore/interfaces/firestore.interfaces';
 import { GenerationService } from '../../generation/generation/generation.service';
 import { CourseGateway } from './course.gateway';
 import { debugLog } from '../../common/debug-logger';
@@ -379,7 +379,7 @@ export class CourseService {
       // Check if this is a peripheral concept
       const importance = this.getConceptImportance(course, moduleConcept);
       
-      let lessonContent;
+      let lessonContent: { title: string; content: string; figures?: Figure[] };
       if (importance === 'peripheral') {
         lessonContent = await this.generationService.generateSummaryLesson(
           moduleConcept,
@@ -393,6 +393,7 @@ export class CourseService {
           previousLessons,
           knowledgeLevelText,
           course.paperContent,
+          course.arxivId,
         );
       }
 
@@ -403,6 +404,11 @@ export class CourseService {
       // Update the lesson with content
       lesson.content = lessonContent.content;
       lesson.title = this.cleanLessonTitle(lessonContent.title);
+      
+      // Add figures if available
+      if (lessonContent.figures && lessonContent.figures.length > 0) {
+        lesson.figures = lessonContent.figures;
+      }
       
       // Save the updated lesson
       debugLog(`Saving specific lesson to database: ${currentLessonId}`);

@@ -33,6 +33,7 @@
     "@nestjs/websockets": "^11.1.5",
     "@types/cookie-parser": "^1.4.9",
     "@types/multer": "^2.0.0",
+    "@types/uuid": "^10.0.0",
     "axios": "^1.11.0",
     "cheerio": "^1.1.2",
     "cookie-parser": "^1.4.7",
@@ -42,8 +43,11 @@
     "langsmith": "^0.3.50",
     "marked": "^4.3.0",
     "multer": "^2.0.2",
+    "pdf-lib": "^1.17.1",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
+    "sharp": "^0.34.3",
+    "uuid": "^11.1.0",
     "xml2js": "^0.6.2"
   },
   "devDependencies": {

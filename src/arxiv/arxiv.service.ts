@@ -5,6 +5,8 @@ import { FirebaseStorageService } from '../storage/storage.service';
 import * as cheerio from 'cheerio';
 import { debugLog } from '../common/debug-logger';
 import { LLMService } from '../llm/llm.service';
+import { FigureExtractionService } from '../figure-extraction/figure-extraction.service';
+import { ExtractedFigure } from '../figure-extraction/interfaces/figure.interface';
 
 @Injectable()
 export class ArxivService {
@@ -13,13 +15,17 @@ export class ArxivService {
   constructor(
     private readonly storageService: FirebaseStorageService,
     private readonly llmService: LLMService,
+    private readonly figureExtractionService: FigureExtractionService,
   ) {}
 
   /**
    * Gets storage paths for ArXiv files
    */
   private getArxivStoragePaths(arxivId: string) {
-    return this.storageService.generateArxivPaths(arxivId);
+    return {
+      ...this.storageService.generateArxivPaths(arxivId),
+      figures: `arxiv/figures/${arxivId}/metadata.json`,
+    };
   }
 
   /**
@@ -254,6 +260,9 @@ export class ArxivService {
       let extractionSource = '';
 
       // Check if HTML version is available for download
+      let extractedFigures: ExtractedFigure[] = [];
+      let rawHtml: string | undefined;
+      
       const htmlAvailable = await this.checkHtmlAvailable(arxivId);
       if (htmlAvailable) {
         debugLog(`HTML version available for ArXiv ID: ${arxivId}, downloading...`);
@@ -270,13 +279,24 @@ export class ArxivService {
           response = await axios.get(htmlUrl, { timeout: 30000 });
         }
 
-        const rawHtml = response.data;
+        rawHtml = response.data;
         debugLog(`Downloaded HTML content for ArXiv ID: ${arxivId}`);
         
         // Extract text from HTML
-        const $ = cheerio.load(rawHtml);
-        extractedText = this.extractTextFromHtml($, arxivId);
-        extractionSource = 'html';
+        if (rawHtml) {
+          const $ = cheerio.load(rawHtml);
+          extractedText = this.extractTextFromHtml($, arxivId);
+          extractionSource = 'html';
+        }
+        
+        // Extract figures from HTML
+        debugLog(`Extracting figures from HTML for ArXiv ID: ${arxivId}`);
+        const figureResult = await this.figureExtractionService.extractFigures(arxivId, {
+          htmlContent: rawHtml,
+          storeImages: true,
+        });
+        extractedFigures = figureResult.figures;
+        debugLog(`Extracted ${extractedFigures.length} figures from HTML`);
       }
 
       // If HTML extraction failed or wasn't available, fall back to PDF
@@ -309,9 +329,20 @@ Return the cleaned, structured text that would be suitable for further analysis.
 
         extractedText = result.content;
         extractionSource = 'gemini-2.0-flash';
+        
+        // Try to extract figures from PDF if we haven't already
+        if (extractedFigures.length === 0) {
+          debugLog(`Attempting to extract figures from PDF for ArXiv ID: ${arxivId}`);
+          const figureResult = await this.figureExtractionService.extractFigures(arxivId, {
+            pdfBuffer,
+            storeImages: true,
+          });
+          extractedFigures = figureResult.figures;
+          debugLog(`Extracted ${extractedFigures.length} figures from PDF`);
+        }
       }
 
-      // Cache the final extracted text to Firebase Storage
+      // Cache the final extracted text and figures to Firebase Storage
       if (extractedText) {
         try {
           await this.storageService.uploadText(paths.text, extractedText, {
@@ -320,8 +351,22 @@ Return the cleaned, structured text that would be suitable for further analysis.
             source: extractionSource
           });
           debugLog(`Cached cleaned text to Firebase Storage for ArXiv ID: ${arxivId} (source: ${extractionSource})`);
+          
+          // Cache figure metadata if we have any
+          if (extractedFigures.length > 0) {
+            await this.storageService.uploadText(
+              paths.figures,
+              JSON.stringify(extractedFigures, null, 2),
+              {
+                arxivId: arxivId,
+                figureCount: extractedFigures.length.toString(),
+                extractedAt: new Date().toISOString(),
+              }
+            );
+            debugLog(`Cached ${extractedFigures.length} figure metadata to Firebase Storage`);
+          }
         } catch (error) {
-          console.warn('Failed to cache cleaned text to Firebase Storage:', error);
+          console.warn('Failed to cache data to Firebase Storage:', error);
         }
       }
 
@@ -354,6 +399,85 @@ Return the cleaned, structured text that would be suitable for further analysis.
     });
 
     return Buffer.from(response.data as ArrayBuffer);
+  }
+
+  /**
+   * Gets extracted figures for a paper
+   * @param arxivId The ArXiv ID of the paper
+   * @returns A promise that resolves to the extracted figures
+   */
+  async getExtractedFigures(arxivId: string): Promise<ExtractedFigure[]> {
+    try {
+      const paths = this.getArxivStoragePaths(arxivId);
+      
+      // Check if we have cached figures
+      if (await this.storageService.fileExists(paths.figures)) {
+        const figuresJson = await this.storageService.downloadText(paths.figures);
+        return JSON.parse(figuresJson) as ExtractedFigure[];
+      }
+      
+      // If no cached figures, try to extract them
+      debugLog(`No cached figures found for ArXiv ID: ${arxivId}, attempting extraction`);
+      
+      // Try HTML first
+      const htmlAvailable = await this.checkHtmlAvailable(arxivId);
+      if (htmlAvailable) {
+        let htmlUrl = `https://arxiv.org/html/${arxivId}v1`;
+        let response;
+        
+        try {
+          response = await axios.get(htmlUrl, { timeout: 30000 });
+        } catch (error) {
+          htmlUrl = `https://arxiv.org/html/${arxivId}`;
+          response = await axios.get(htmlUrl, { timeout: 30000 });
+        }
+        
+        const figureResult = await this.figureExtractionService.extractFigures(arxivId, {
+          htmlContent: response.data,
+          storeImages: true,
+        });
+        
+        // Cache the results
+        if (figureResult.figures.length > 0) {
+          await this.storageService.uploadText(
+            paths.figures,
+            JSON.stringify(figureResult.figures, null, 2),
+            {
+              arxivId: arxivId,
+              figureCount: figureResult.figures.length.toString(),
+              extractedAt: new Date().toISOString(),
+            }
+          );
+        }
+        
+        return figureResult.figures;
+      }
+      
+      // Fallback to PDF
+      const pdfBuffer = await this.getPdfBuffer(arxivId);
+      const figureResult = await this.figureExtractionService.extractFigures(arxivId, {
+        pdfBuffer,
+        storeImages: true,
+      });
+      
+      // Cache the results
+      if (figureResult.figures.length > 0) {
+        await this.storageService.uploadText(
+          paths.figures,
+          JSON.stringify(figureResult.figures, null, 2),
+          {
+            arxivId: arxivId,
+            figureCount: figureResult.figures.length.toString(),
+            extractedAt: new Date().toISOString(),
+          }
+        );
+      }
+      
+      return figureResult.figures;
+    } catch (error) {
+      console.error(`Error getting figures for ArXiv ID ${arxivId}:`, error);
+      return [];
+    }
   }
 
   /**
