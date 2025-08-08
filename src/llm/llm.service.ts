@@ -209,6 +209,13 @@ export class LLMService {
   }
 
   /**
+   * Gets the current token usage by model without resetting the counters
+   */
+  getTokenUsage(): Record<string, { inputTokens: number; outputTokens: number; totalTokens: number }> {
+    return { ...this.tokenUsageByModel };
+  }
+
+  /**
    * Gets the current token usage by model and resets the counters
    */
   getAndResetTokenUsage(): Record<string, { inputTokens: number; outputTokens: number; totalTokens: number }> {
@@ -216,5 +223,13 @@ export class LLMService {
     this.tokenUsageByModel = {};
     debugLog('Token usage retrieved and reset:', usage);
     return usage;
+  }
+
+  /**
+   * Resets token usage counters
+   */
+  resetTokenUsage(): void {
+    this.tokenUsageByModel = {};
+    debugLog('Token usage counters reset');
   }
 }

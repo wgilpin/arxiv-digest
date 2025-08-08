@@ -146,7 +146,7 @@ export class PaperController {
       const conceptsWithImportance = 
         await this.generationService.extractConceptsWithImportance(paperText);
 
-      // Capture token usage from concept extraction
+      // Capture token usage from both PDF extraction and concept extraction
       const tokenUsageByModel = this.generationService.getAndResetTokenUsage();
 
       // Extract concept names for backward compatibility
@@ -217,7 +217,7 @@ export class PaperController {
       const conceptsWithImportance = 
         await this.generationService.extractConceptsWithImportance(paperText);
 
-      // Capture token usage from concept extraction
+      // Capture token usage from both PDF extraction and concept extraction
       const tokenUsageByModel = this.generationService.getAndResetTokenUsage();
 
       // Extract concept names for backward compatibility

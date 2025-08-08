@@ -398,9 +398,13 @@ export class CourseService {
         );
       }
 
-      // Capture token usage from lesson content generation
-      const tokenUsage = this.generationService.getAndResetTokenUsage();
-      await this.updateCourseTokenUsage(userId, courseId, tokenUsage);
+      // Capture token usage from lesson content generation (but don't reset yet)
+      const tokenUsage = this.generationService.getTokenUsage();
+      if (Object.keys(tokenUsage).length > 0) {
+        await this.updateCourseTokenUsage(userId, courseId, tokenUsage);
+        // Only reset after successfully saving
+        this.generationService.resetTokenUsage();
+      }
 
       // Update the lesson with content
       lesson.content = lessonContent.content;

@@ -67,11 +67,26 @@ export class GenerationService {
   ) {}
 
   /**
+   * Gets the current token usage by model without resetting the counters
+   */
+  getTokenUsage(): Record<string, { inputTokens: number; outputTokens: number; totalTokens: number }> {
+    // Delegate to LLM service which now tracks token usage
+    return this.llmService.getTokenUsage();
+  }
+
+  /**
    * Gets the current token usage by model and resets the counters
    */
   getAndResetTokenUsage(): Record<string, { inputTokens: number; outputTokens: number; totalTokens: number }> {
     // Delegate to LLM service which now tracks token usage
     return this.llmService.getAndResetTokenUsage();
+  }
+
+  /**
+   * Resets token usage counters
+   */
+  resetTokenUsage(): void {
+    this.llmService.resetTokenUsage();
   }
 
   /**
