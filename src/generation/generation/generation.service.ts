@@ -59,6 +59,7 @@ export class GenerationService {
   private readonly wikipediaCache: WikipediaCache = {};
   private readonly maxCacheSize = 100;
   private readonly cacheExpiryHours = 24;
+  private figureUsageTracker: Map<string, Set<string>> = new Map(); // arxivId -> Set<figureId>
   constructor(
     private readonly llmService: LLMService,
     private readonly modelSelector: ModelSelectorService,
@@ -549,7 +550,8 @@ Concept: ${concept}
     concept: string,
     knowledgeLevel?: string,
     paperContent?: string,
-  ): Promise<{ title: string; content: string }> {
+    arxivId?: string,
+  ): Promise<{ title: string; content: string; figures?: Figure[] }> {
     // Always use the broader concept for Wikipedia search
     const searchQuery = concept;
     debugLog(`Generating summary lesson for peripheral concept: "${concept}"`);
@@ -583,6 +585,15 @@ Concept: ${concept}
     debugLog('Using LLM-based summary generation as fallback...');
     try {
       const fallbackLesson = await this.generateLLMSummaryLesson(concept, knowledgeLevel, paperContent);
+      
+      // Add relevant figures if arxivId is provided
+      if (arxivId) {
+        const figures = await this.selectRelevantFigures(arxivId, concept, fallbackLesson.content);
+        if (figures.length > 0) {
+          return { ...fallbackLesson, figures };
+        }
+      }
+      
       debugLog(`Successfully generated summary lesson using LLM fallback for: ${concept}`);
       return fallbackLesson;
     } catch (error) {
@@ -1383,6 +1394,14 @@ Make the content engaging, informative, and approximately 200-350 words (2-3 min
   }
 
   /**
+   * Clears figure usage tracking for a specific paper (call when starting a new course)
+   */
+  clearFigureUsageTracking(arxivId: string): void {
+    this.figureUsageTracker.delete(arxivId);
+    debugLog(`Cleared figure usage tracking for ArXiv ID: ${arxivId}`);
+  }
+
+  /**
    * Selects figures relevant to a specific lesson topic
    */
   private async selectRelevantFigures(
@@ -1400,7 +1419,7 @@ Make the content engaging, informative, and approximately 200-350 words (2-3 min
 
       // Use LLM to select relevant figures
       const prompt = `
-Given the following lesson about "${lessonTopic}" and a list of figures from the research paper, select which figures would be most relevant to include in this lesson.
+Analyze this lesson about "${lessonTopic}" and determine which figures from the research paper would be DIRECTLY RELEVANT and helpful for understanding THIS SPECIFIC LESSON.
 
 Lesson Content:
 ${lessonContent.slice(0, 2000)}
@@ -1408,34 +1427,68 @@ ${lessonContent.slice(0, 2000)}
 Available Figures:
 ${allFigures.map((fig, idx) => `${idx + 1}. Figure ${fig.figureNumber || idx + 1}: ${fig.caption}`).join('\n')}
 
-Select up to 2-3 figures that would best illustrate or support the lesson content. Consider:
-- Direct relevance to the lesson topic
-- Educational value for understanding the concept
-- Whether the figure helps clarify complex ideas
+IMPORTANT CRITERIA - A figure should ONLY be selected if:
+1. The lesson content specifically discusses concepts directly illustrated by the figure
+2. The figure would help the student understand the specific topic being taught
+3. There are clear connections between lesson content and what the figure shows
 
-Return ONLY a JSON array of figure indices (1-based) that should be included:
-Example: [1, 3] or [] if no figures are relevant
+Be VERY SELECTIVE - most lessons should have 0 figures. Only select 1-2 figures that are truly essential for understanding THIS lesson.
+
+Return ONLY a JSON array of figure indices (1-based):
+- If NO figures are directly relevant: []
+- If some figures are relevant: [1] or [2, 3]
+- Do NOT include figures just because they're from the same paper
 `;
 
       const result = await this.llmService.generateLesson({ prompt });
+      
+      debugLog(`LLM response for figure selection: ${result.content}`);
       
       try {
         // Parse the response to get figure indices
         const jsonMatch = result.content.match(/\[\s*\d*(?:\s*,\s*\d+)*\s*\]/);
         if (jsonMatch) {
           const indices = JSON.parse(jsonMatch[0]) as number[];
+          debugLog(`Parsed figure indices for "${lessonTopic}": [${indices.join(', ')}]`);
           
           // Convert indices to figures (adjust for 0-based array)
-          const selectedFigures = indices
+          let candidateFigures = indices
             .map(idx => allFigures[idx - 1])
-            .filter(fig => fig !== undefined)
-            .slice(0, 3); // Limit to 3 figures max
+            .filter(fig => fig !== undefined);
+          
+          // Track figure usage to avoid overuse
+          if (!this.figureUsageTracker.has(arxivId)) {
+            this.figureUsageTracker.set(arxivId, new Set());
+          }
+          const usedFigures = this.figureUsageTracker.get(arxivId)!;
+          
+          // Filter out figures that have been used too many times (more than 2 times)
+          const figureUsageCounts = new Map<string, number>();
+          usedFigures.forEach(figId => {
+            figureUsageCounts.set(figId, (figureUsageCounts.get(figId) || 0) + 1);
+          });
+          
+          candidateFigures = candidateFigures.filter(fig => 
+            (figureUsageCounts.get(fig.id) || 0) < 2
+          );
+          
+          // Select final figures (max 1 per lesson to be more conservative)
+          const selectedFigures = candidateFigures.slice(0, 1);
+          
+          // Track usage
+          selectedFigures.forEach(fig => usedFigures.add(fig.id));
           
           debugLog(`Selected ${selectedFigures.length} figures for lesson "${lessonTopic}"`);
+          if (selectedFigures.length > 0) {
+            debugLog(`Selected figures: ${selectedFigures.map(f => `Figure ${f.figureNumber}`).join(', ')}`);
+          }
           return selectedFigures;
+        } else {
+          debugLog(`No valid JSON array found in response for "${lessonTopic}"`);
         }
       } catch (error) {
         console.error('Error parsing figure selection:', error);
+        debugLog(`JSON parsing failed for lesson "${lessonTopic}"`);
       }
       
       return [];

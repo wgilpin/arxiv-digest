@@ -385,6 +385,7 @@ export class CourseService {
           moduleConcept,
           knowledgeLevelText,
           course.paperContent,
+          course.arxivId,
         );
       } else {
         lessonContent = await this.generationService.generateLessonFromExternalSources(
