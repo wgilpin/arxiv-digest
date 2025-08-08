@@ -146,15 +146,19 @@ export class PaperController {
       const conceptsWithImportance = 
         await this.generationService.extractConceptsWithImportance(paperText);
 
-      // Capture token usage from both PDF extraction and concept extraction
+      // Order concepts by their conceptual dependencies
+      const orderedConceptsWithImportance = 
+        await this.generationService.orderConceptsByDependencies(conceptsWithImportance);
+
+      // Capture token usage from PDF extraction, concept extraction, and ordering
       const tokenUsageByModel = this.generationService.getAndResetTokenUsage();
 
-      // Extract concept names for backward compatibility
-      const extractedConcepts = conceptsWithImportance.map(item => item.concept);
+      // Extract concept names for backward compatibility (using ordered concepts)
+      const extractedConcepts = orderedConceptsWithImportance.map(item => item.concept);
       
-      // Create importance mapping
+      // Create importance mapping (using ordered concepts)
       const conceptImportance: Record<string, { importance: 'central' | 'supporting' | 'peripheral'; reasoning: string }> = {};
-      conceptsWithImportance.forEach(item => {
+      orderedConceptsWithImportance.forEach(item => {
         conceptImportance[item.concept] = {
           importance: item.importance,
           reasoning: item.reasoning
@@ -217,15 +221,19 @@ export class PaperController {
       const conceptsWithImportance = 
         await this.generationService.extractConceptsWithImportance(paperText);
 
-      // Capture token usage from both PDF extraction and concept extraction
+      // Order concepts by their conceptual dependencies
+      const orderedConceptsWithImportance = 
+        await this.generationService.orderConceptsByDependencies(conceptsWithImportance);
+
+      // Capture token usage from PDF extraction, concept extraction, and ordering
       const tokenUsageByModel = this.generationService.getAndResetTokenUsage();
 
-      // Extract concept names for backward compatibility
-      const extractedConcepts = conceptsWithImportance.map(item => item.concept);
+      // Extract concept names for backward compatibility (using ordered concepts)
+      const extractedConcepts = orderedConceptsWithImportance.map(item => item.concept);
       
-      // Create importance mapping
+      // Create importance mapping (using ordered concepts)
       const conceptImportance: Record<string, { importance: 'central' | 'supporting' | 'peripheral'; reasoning: string }> = {};
-      conceptsWithImportance.forEach(item => {
+      orderedConceptsWithImportance.forEach(item => {
         conceptImportance[item.concept] = {
           importance: item.importance,
           reasoning: item.reasoning

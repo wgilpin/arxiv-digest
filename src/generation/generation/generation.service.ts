@@ -1096,6 +1096,102 @@ ${paperText.slice(0, 30000)} // Limit to avoid token limits
   }
 
   /**
+   * Orders concepts by their conceptual dependencies using LLM analysis.
+   * Concepts that are prerequisites for others are placed earlier in the learning sequence.
+   * @param concepts Array of concepts with importance levels
+   * @returns Promise resolving to concepts ordered by dependency hierarchy
+   */
+  async orderConceptsByDependencies(concepts: ConceptWithImportance[]): Promise<ConceptWithImportance[]> {
+    if (concepts.length <= 2) {
+      return concepts; // No need to reorder if we have very few concepts
+    }
+
+    try {
+      const conceptNames = concepts.map(c => c.concept).join(', ');
+      
+      const prompt = `
+Analyze these academic concepts and order them from most fundamental to most advanced based on learning dependencies. 
+
+Concepts: ${conceptNames}
+
+Consider:
+- Which concepts are prerequisites for understanding others?
+- What is the natural learning progression from basic to advanced?
+- Which concepts build upon other concepts in the list?
+
+For example:
+- "Neural Networks" should come before "Transformers"
+- "Linear Algebra" should come before "Attention Mechanisms"
+- "Information Theory" should come before "Late Chunking"
+
+IMPORTANT: Return ONLY a valid JSON array of the concept names in dependency order (most fundamental first, most advanced last). Do not include explanations or code blocks.
+
+Example format: ["Linear Algebra", "Neural Networks", "Attention Mechanisms", "Transformers"]
+`;
+
+      const result = await this.llmService.extractConcepts({
+        prompt,
+      });
+      const response = result.content.trim();
+
+      // Try to parse JSON response
+      try {
+        let jsonString = response;
+        
+        // Extract JSON from markdown code blocks if present
+        const jsonMatch = jsonString.match(/```(?:json)?\s*(\[[\s\S]*?\])\s*```/);
+        if (jsonMatch) {
+          jsonString = jsonMatch[1];
+        } else if (jsonString.startsWith('```') && jsonString.endsWith('```')) {
+          jsonString = jsonString.slice(3, -3).replace(/^json\s*/, '').trim();
+        }
+
+        // Normalize quotes
+        jsonString = jsonString.replace(/[""]/g, '"').replace(/['']/g, "'");
+
+        const orderedConceptNames = JSON.parse(jsonString) as string[];
+        
+        if (Array.isArray(orderedConceptNames) && orderedConceptNames.length > 0) {
+          // Reorder original concepts array based on LLM ordering
+          const orderedConcepts: ConceptWithImportance[] = [];
+          const conceptMap = new Map(concepts.map(c => [c.concept.toLowerCase().trim(), c]));
+
+          // Add concepts in the order specified by LLM
+          for (const conceptName of orderedConceptNames) {
+            const normalizedName = conceptName.toLowerCase().trim();
+            const matchingConcept = conceptMap.get(normalizedName);
+            if (matchingConcept) {
+              orderedConcepts.push(matchingConcept);
+              conceptMap.delete(normalizedName);
+            }
+          }
+
+          // Add any remaining concepts that weren't matched (fallback)
+          for (const remainingConcept of conceptMap.values()) {
+            orderedConcepts.push(remainingConcept);
+          }
+
+          debugLog(`Reordered ${concepts.length} concepts by dependencies:`, 
+            orderedConcepts.map(c => c.concept));
+
+          return orderedConcepts;
+        }
+      } catch (parseError) {
+        console.error('Failed to parse concept ordering JSON:', parseError);
+        console.error('Raw response:', response);
+      }
+
+      // Fallback: return original order if LLM ordering fails
+      debugLog('LLM concept ordering failed, using original order');
+      return concepts;
+
+    } catch (error) {
+      console.error('Error ordering concepts by dependencies:', error);
+      return concepts; // Return original order on error
+    }
+  }
+
+  /**
    * Generates a list of lesson topics for a given concept, breaking it down into 2-3 minute lessons.
    * @param concept The concept to break down into lesson topics.
    * @returns A promise that resolves to an array of lesson topic strings.
