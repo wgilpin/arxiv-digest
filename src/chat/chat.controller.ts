@@ -177,6 +177,38 @@ export class ChatController {
   }
 
   /**
+   * Clear chat history for a lesson (POST endpoint for UI)
+   */
+  @Post('clear')
+  async clearChat(
+    @Body() body: { lessonId: string; courseId: string },
+    @Req() req: Request,
+  ) {
+    try {
+      const userId = (req as any).user?.uid;
+      if (!userId) {
+        throw new HttpException('User not authenticated', HttpStatus.UNAUTHORIZED);
+      }
+
+      const { lessonId } = body;
+      if (!lessonId) {
+        throw new HttpException('Missing lessonId', HttpStatus.BAD_REQUEST);
+      }
+
+      await this.chatService.clearChatHistory(lessonId, userId);
+      debugLog(`Chat cleared for lesson ${lessonId}, user ${userId}`);
+      
+      return { success: true, message: 'Chat history cleared successfully' };
+    } catch (error) {
+      debugLog('Error clearing chat:', error);
+      throw new HttpException(
+        'Failed to clear chat history',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  /**
    * Non-streaming chat endpoint (fallback)
    */
   @Post('message')

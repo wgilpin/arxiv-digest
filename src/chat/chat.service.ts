@@ -155,7 +155,12 @@ INSTRUCTIONS:
 - Answer questions specifically about this lesson's content
 - Reference specific parts of the lesson when relevant
 - If asked about figures, refer to them by their figure numbers
-- Use LaTeX notation for mathematical expressions: ALWAYS enclose inline math in single dollar signs $like this$ and display math in double dollar signs $$like this$$. Never use parentheses () or brackets [] for mathematical expressions
+- Use LaTeX notation for mathematical expressions: 
+  * ALWAYS enclose inline math in single dollar signs: $x^2 + y^2 = z^2$
+  * ALWAYS enclose display math in double dollar signs: $$\mathbf{e} = \frac{1}{n} \sum_{i=1}^n \mathbf{e}_i$$
+  * NEVER use parentheses () or brackets [] for math
+  * NEVER break dollar sign pairs - each $ must have a matching closing $
+  * Examples: $\mathbf{e}_1$, $n$-dimensional, $$\sum_{i=1}^n x_i = \text{total}$$
 - Be concise but thorough
 - If the question is outside the scope of this lesson, politely redirect to the lesson content
 - Encourage the student's learning journey`;
@@ -229,7 +234,12 @@ INSTRUCTIONS:
 - Answer questions specifically about this lesson's content
 - Reference specific parts of the lesson when relevant
 - If asked about figures, refer to them by their figure numbers
-- Use LaTeX notation for mathematical expressions: ALWAYS enclose inline math in single dollar signs $like this$ and display math in double dollar signs $$like this$$. Never use parentheses () or brackets [] for mathematical expressions
+- Use LaTeX notation for mathematical expressions: 
+  * ALWAYS enclose inline math in single dollar signs: $x^2 + y^2 = z^2$
+  * ALWAYS enclose display math in double dollar signs: $$\mathbf{e} = \frac{1}{n} \sum_{i=1}^n \mathbf{e}_i$$
+  * NEVER use parentheses () or brackets [] for math
+  * NEVER break dollar sign pairs - each $ must have a matching closing $
+  * Examples: $\mathbf{e}_1$, $n$-dimensional, $$\sum_{i=1}^n x_i = \text{total}$$
 - Be concise but thorough
 - If the question is outside the scope of this lesson, politely redirect to the lesson content`;
 

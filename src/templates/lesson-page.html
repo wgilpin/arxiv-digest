@@ -278,7 +278,19 @@
     <!-- Chat Section -->
     <div class="chat-section">
       <div class="card bg-base-100 shadow-xl p-6">
-        <h2 class="text-2xl font-bold mb-2">Ask AI Assistant</h2>
+        <div class="flex justify-between items-center mb-2">
+          <h2 class="text-2xl font-bold">Ask AI Assistant</h2>
+          <button 
+            id="clearChatBtn" 
+            class="btn btn-ghost btn-sm text-red-600 hover:text-red-800"
+            onclick="clearChat()"
+            title="Clear conversation history">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1-1H9a1 1 0 00-1 1v3M4 7h16"></path>
+            </svg>
+            Clear Chat
+          </button>
+        </div>
         <p class="text-gray-600 mb-4">Questions about: {{lessonTitle}}</p>
         
         <!-- Chat messages container -->
@@ -355,8 +367,36 @@
       }
     }
 
+    // Helper function to fix common LaTeX formatting issues
+    function fixLatexFormatting(html) {
+      // Fix broken dollar signs - find unclosed $ and close them
+      let fixed = html;
+      
+      // Fix display math that starts with $$ but doesn't end properly
+      fixed = fixed.replace(/\$\$([^$]*?)(?:\$(?!\$)|$)/g, '$$$$1$$$$');
+      
+      // Fix inline math that doesn't close properly
+      const parts = fixed.split('$$');
+      for (let i = 0; i < parts.length; i += 2) {
+        // Process non-display math parts
+        let part = parts[i];
+        const dollars = (part.match(/\$/g) || []).length;
+        if (dollars % 2 === 1) {
+          // Odd number of $ signs, add one at the end
+          part = part + '$';
+        }
+        parts[i] = part;
+      }
+      fixed = parts.join('$$');
+      
+      return fixed;
+    }
+
     // Helper function to process MathJax with retries
     function processMathJax(element) {
+      // Fix LaTeX formatting before processing
+      element.innerHTML = fixLatexFormatting(element.innerHTML);
+      
       if (window.MathJax && window.MathJax.typesetPromise) {
         window.MathJax.typesetPromise([element]).catch(err => {
           console.error('MathJax error:', err);
@@ -411,6 +451,62 @@
       const input = document.getElementById('chatInput');
       input.value = prompt;
       sendMessage();
+    }
+    
+    async function clearChat() {
+      if (!confirm('Are you sure you want to clear the chat history? This cannot be undone.')) {
+        return;
+      }
+      
+      const clearBtn = document.getElementById('clearChatBtn');
+      clearBtn.disabled = true;
+      clearBtn.innerHTML = '<span class="loading loading-spinner loading-sm"></span> Clearing...';
+      
+      try {
+        const response = await fetch('/api/chat/clear', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            lessonId,
+            courseId
+          })
+        });
+        
+        if (!response.ok) {
+          throw new Error('Failed to clear chat');
+        }
+        
+        // Clear the UI
+        const messagesContainer = document.getElementById('chatMessages');
+        messagesContainer.innerHTML = `
+          <div class="text-center text-gray-500 py-8">
+            <svg class="w-12 h-12 mx-auto mb-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"></path>
+            </svg>
+            <p>Start a conversation by asking a question about the lesson.</p>
+          </div>
+        `;
+        
+        // Show suggested prompts again
+        document.getElementById('suggestedPrompts').style.display = 'flex';
+        
+        // Focus on input
+        document.getElementById('chatInput').focus();
+        
+      } catch (error) {
+        console.error('Error clearing chat:', error);
+        alert('Failed to clear chat history. Please try again.');
+      } finally {
+        clearBtn.disabled = false;
+        clearBtn.innerHTML = `
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1-1H9a1 1 0 00-1 1v3M4 7h16"></path>
+          </svg>
+          Clear Chat
+        `;
+      }
     }
     
     async function sendMessage() {
