@@ -127,8 +127,8 @@
     /* Chat styles */
     .chat-section {
       margin-top: 2rem;
-      border-top: 2px solid #e5e7eb;
-      padding-top: 2rem;
+      border-top: 1px solid #e5e7eb;
+      padding-top: 1.5rem;
     }
     
     .chat-messages {
@@ -266,33 +266,16 @@
     </div>
 
     <h1 class="text-3xl font-bold mb-4">{{lessonTitle}}</h1>
-    <div class="card bg-base-100 shadow-xl p-8 mb-4">
+    <div class="card bg-base-100 shadow-xl p-8">
       <div class="prose max-w-none">
         {{lessonContent}}
         
         <!-- Figures -->
         {{lessonFigures}}
       </div>
-    </div>
-    
-    <!-- Chat Section -->
-    <div class="chat-section">
-      <div class="card bg-base-100 shadow-xl p-6">
-        <div class="flex justify-between items-center mb-2">
-          <h2 class="text-2xl font-bold">Ask AI Assistant</h2>
-          <button 
-            id="clearChatBtn" 
-            class="btn btn-ghost btn-sm text-red-600 hover:text-red-800"
-            onclick="clearChat()"
-            title="Clear conversation history">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1-1H9a1 1 0 00-1 1v3M4 7h16"></path>
-            </svg>
-            Clear Chat
-          </button>
-        </div>
-        <p class="text-gray-600 mb-4">Questions about: {{lessonTitle}}</p>
-        
+      
+      <!-- Chat Section -->
+      <div class="chat-section">
         <!-- Chat messages container -->
         <div id="chatMessages" class="chat-messages">
           <div class="text-center text-gray-500 py-8">
@@ -329,6 +312,20 @@
             onclick="sendMessage()">
             <span id="sendButtonText">Send</span>
             <span id="sendButtonSpinner" class="loading loading-spinner loading-sm hidden"></span>
+          </button>
+        </div>
+        
+        <!-- Clear chat button -->
+        <div class="flex justify-center mt-3">
+          <button 
+            id="clearChatBtn" 
+            class="btn btn-ghost btn-sm text-red-600 hover:text-red-800"
+            onclick="clearChat()"
+            title="Clear conversation history">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1-1H9a1 1 0 00-1 1v3M4 7h16"></path>
+            </svg>
+            Clear Chat
           </button>
         </div>
       </div>
