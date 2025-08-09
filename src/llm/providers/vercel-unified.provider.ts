@@ -101,7 +101,7 @@ export class VercelUnifiedProvider implements LLMProvider {
         } : undefined,
         model: modelName,
       };
-    } catch (error) {
+    } catch (error: any) {
       debugLog('Vercel Unified provider error:', error);
       
       // Try fallback with a different provider
@@ -131,14 +131,14 @@ export class VercelUnifiedProvider implements LLMProvider {
           } : undefined,
           model: modelName,
         };
-      } catch (fallbackError) {
+      } catch (fallbackError: any) {
         debugLog('Fallback also failed:', fallbackError);
         throw error; // Throw original error
       }
     }
   }
 
-  async streamContent(request: LLMRequest) {
+  streamContent(request: LLMRequest) {
     if (!this.isAvailable()) {
       throw new Error('No LLM providers configured');
     }
@@ -162,7 +162,7 @@ export class VercelUnifiedProvider implements LLMProvider {
       }
 
       return streamText(streamConfig);
-    } catch (error) {
+    } catch (error: any) {
       debugLog('Vercel Unified provider streaming error:', error);
       
       // Try fallback with a different provider
@@ -182,7 +182,7 @@ export class VercelUnifiedProvider implements LLMProvider {
         }
 
         return streamText(streamConfig);
-      } catch (fallbackError) {
+      } catch (fallbackError: any) {
         debugLog('Streaming fallback also failed:', fallbackError);
         throw error; // Throw original error
       }

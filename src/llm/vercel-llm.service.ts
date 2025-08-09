@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { LLMProvider, LLMRequest, LLMResponse, LLMProviderType, ModelUsage } from './interfaces/llm.interface';
+import { LLMRequest, LLMResponse, LLMProviderType, ModelUsage } from './interfaces/llm.interface';
 import { VercelUnifiedProvider } from './providers/vercel-unified.provider';
 import { ModelSelectorService } from './model-selector.service';
 import { debugLog } from '../common/debug-logger';
@@ -21,7 +21,7 @@ export class VercelLLMService {
     providerType?: LLMProviderType,
     usage?: ModelUsage
   ): Promise<LLMResponse> {
-    return traceable(async (request: LLMRequest, providerType?: LLMProviderType) => {
+    return traceable(async (request: LLMRequest, _providerType?: LLMProviderType) => {
       // Determine model based on usage
       let modelName = request.model;
       
@@ -49,16 +49,16 @@ export class VercelLLMService {
         this.trackTokenUsage(result, enhancedRequest.model || 'unknown');
         
         return result;
-      } catch (error) {
+      } catch (error: any) {
         debugLog(`Vercel unified provider failed:`, error.message);
         throw error;
       }
-    }, { run_type: "llm" })(request, providerType);
+    }, { run_type: "llm" })(request, _providerType);
   }
 
-  async streamContent(
+  streamContent(
     request: LLMRequest,
-    providerType?: LLMProviderType,
+    _providerType?: LLMProviderType,
     usage?: ModelUsage
   ) {
     // Determine model based on usage
@@ -108,7 +108,7 @@ export class VercelLLMService {
       // PDF extraction requires file upload capability, currently only available with Gemini
       try {
         return this.generateContentForUsage(request, ModelUsage.PDF_EXTRACTION);
-      } catch (error) {
+      } catch (error: any) {
         debugLog('PDF extraction failed, this may be due to network issues with Gemini API');
         throw new Error(`PDF extraction failed: ${error.message}. Please try again later or use a different input method.`);
       }

@@ -55,7 +55,6 @@ export class GeminiProvider implements LLMProvider {
       
       // Retry logic with exponential backoff for network issues
       let result;
-      let lastError;
       const maxRetries = 3;
       
       for (let attempt = 1; attempt <= maxRetries; attempt++) {
@@ -83,8 +82,7 @@ export class GeminiProvider implements LLMProvider {
           debugLog(`Gemini API request succeeded on attempt ${attempt}`);
           break;
           
-        } catch (error) {
-          lastError = error;
+        } catch (error: any) {
           debugLog(`Gemini API attempt ${attempt} failed:`, error.message);
           
           // If this is the last attempt, or if it's not a network error, don't retry
@@ -104,7 +102,7 @@ export class GeminiProvider implements LLMProvider {
       }
       
       debugLog('Gemini API request completed, processing response...');
-      const response = await result.response;
+      const response = result.response;
       const content = response.text();
       
       debugLog('Gemini response received successfully, content length:', content.length);
@@ -128,7 +126,7 @@ export class GeminiProvider implements LLMProvider {
         model: modelName,
         usage,
       };
-    } catch (error) {
+    } catch (error: any) {
       console.error('Gemini provider error details:', {
         name: error.name,
         message: error.message,

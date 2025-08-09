@@ -28,7 +28,15 @@ export class GrokProvider implements LLMProvider {
       }
       messages.push({ role: 'user', content: request.prompt });
 
-      const requestBody: any = {
+      interface GrokRequestBody {
+        model: string;
+        messages: Array<{ role: string; content: string }>;
+        temperature: number;
+        max_tokens: number;
+        reasoning_effort?: string;
+      }
+
+      const requestBody: GrokRequestBody = {
         model: request.model || this.defaultModel,
         messages,
         temperature: request.temperature || 0.7,
@@ -51,7 +59,16 @@ export class GrokProvider implements LLMProvider {
         }
       );
 
-      const completion = response.data;
+      interface GrokCompletion {
+        choices: Array<{ message: { content: string } }>;
+        usage?: {
+          prompt_tokens?: number;
+          completion_tokens?: number;
+          total_tokens?: number;
+        };
+      }
+
+      const completion = response.data as GrokCompletion;
       const content = completion.choices[0].message.content;
 
       return {
@@ -67,7 +84,7 @@ export class GrokProvider implements LLMProvider {
           total_tokens: completion.usage?.total_tokens,
         },
       };
-    } catch (error) {
+    } catch (error: any) {
       if (error.response) {
         const errorMessage = error.response.data?.error?.message || 
                            error.response.data?.message || 
