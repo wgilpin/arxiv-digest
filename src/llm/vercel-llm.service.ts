@@ -53,7 +53,7 @@ export class VercelLLMService {
         debugLog(`Vercel unified provider failed:`, error.message);
         throw error;
       }
-    }, { run_type: "llm" })(request, _providerType);
+    }, { run_type: "llm" })(request, providerType);
   }
 
   streamContent(

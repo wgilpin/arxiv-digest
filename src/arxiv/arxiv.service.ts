@@ -153,9 +153,10 @@ export class ArxivService {
       // http://arxiv.org/abs/2507.11768
       // arxiv.org/abs/2507.11768
       // https://arxiv.org/pdf/2507.11768.pdf
+      // https://arxiv.org/html/2408.06780v1
       // https://arxiv.org/abs/math.GT/0309136
       const urlMatch = trimmedInput.match(
-        /arxiv\.org\/(?:abs|pdf)\/(.+?)(?:\.pdf)?(?:\?|#|$)/i,
+        /arxiv\.org\/(?:abs|pdf|html)\/(.+?)(?:\.pdf)?(?:\?|#|$)/i,
       );
 
       if (urlMatch && urlMatch[1]) {

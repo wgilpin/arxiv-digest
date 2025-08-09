@@ -212,12 +212,22 @@ export class PaperController {
   @Post('/')
   @UseGuards(AuthGuard)
   async createCourse(@Body('arxivId') arxivId: string, @Res() res: Response, @Req() req: Request & { user: { uid: string } }) {
+    console.log('=== POST / createCourse ===');
+    console.log('Raw arxivId input:', arxivId);
+    
     try {
       // Extract clean ArXiv ID from input (handles both URLs and raw IDs)
+      console.log('Extracting ArXiv ID from:', arxivId);
       const cleanArxivId = this.arxivService.extractArxivId(arxivId);
+      console.log('Clean ArXiv ID:', cleanArxivId);
       
+      console.log('Fetching paper title...');
       const paperTitle = await this.arxivService.fetchPaperTitle(arxivId);
+      console.log('Paper title:', paperTitle);
+      
+      console.log('Fetching paper text...');
       const paperText = await this.arxivService.getPaperText(arxivId);
+      console.log('Paper text length:', paperText?.length || 0);
       const conceptsWithImportance = 
         await this.generationService.extractConceptsWithImportance(paperText);
 
@@ -269,6 +279,15 @@ export class PaperController {
 
       res.redirect(`/${courseId}/assess`);
     } catch (error) {
+      console.error('=== ERROR in createCourse ===');
+      console.error('Error type:', error?.constructor?.name);
+      console.error('Error message:', error?.message);
+      console.error('Full error:', error);
+      if (error instanceof Error) {
+        console.error('Stack trace:', error.stack);
+      }
+      console.error('========================');
+      
       if (error instanceof NotFoundException) {
         const html = TemplateHelper.renderTemplate('error-not-found.html', {
           errorMessage: error.message,
