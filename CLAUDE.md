@@ -111,3 +111,4 @@ PORT=3000  # Optional, defaults to 3000
 ## Deployment Notes
 
 - Production is hosted in the Railway service.
+- system database is firebase firestore

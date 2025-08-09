@@ -92,4 +92,34 @@ export class FirestoreService {
   async deleteCourse(userId: string, courseId: string) {
     await this.getUserCoursesCollection(userId).doc(courseId).delete();
   }
+
+  /**
+   * Get course by ID across all users (for chat functionality)
+   * This searches through all users to find a course by ID
+   */
+  async getCourseAcrossUsers(courseId: string): Promise<any | null> {
+    try {
+      // Query all users collections for the specific course ID
+      const usersSnapshot = await this.firestore.collection('users').get();
+      
+      for (const userDoc of usersSnapshot.docs) {
+        const courseDoc = await userDoc.ref.collection('courses').doc(courseId).get();
+        if (courseDoc.exists) {
+          return { id: courseDoc.id, ...courseDoc.data() };
+        }
+      }
+      
+      return null;
+    } catch (error) {
+      this.logger.error('Error searching for course across users:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Get the main database instance for general collections (like chatMessages)
+   */
+  getDb(): Firestore {
+    return this.firestore;
+  }
 }

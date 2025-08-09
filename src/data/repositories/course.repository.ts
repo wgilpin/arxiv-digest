@@ -99,4 +99,14 @@ export class CourseRepository {
     lesson.completedAt = new Date();
     await this.updateLesson(userId, courseId, moduleIndex, lessonIndex, lesson);
   }
+
+  /**
+   * Find a course by ID across all users (for chat functionality)
+   * This is used when we need to access course data for chat without userId context
+   */
+  async findByIdAcrossUsers(courseId: string): Promise<Course | null> {
+    // For chat purposes, we need to search across all users' courses
+    // This is a workaround since chat doesn't always have user context readily available
+    return this.firestoreService.getCourseAcrossUsers(courseId);
+  }
 }

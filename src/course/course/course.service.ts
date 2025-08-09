@@ -635,6 +635,54 @@ export class CourseService {
     await this.courseRepository.markLessonComplete(userId, courseId, moduleIndex, lessonIndex);
   }
 
+  /**
+   * Get a lesson by its composite ID (courseId-moduleIndex-lessonIndex)
+   */
+  async getLesson(lessonId: string): Promise<Lesson | null> {
+    // Parse lesson ID format: courseId-moduleIndex-lessonIndex
+    const parts = lessonId.split('-');
+    if (parts.length < 3) {
+      debugLog('Invalid lesson ID format:', lessonId);
+      return null;
+    }
+    
+    const lessonIndex = parseInt(parts.pop() || '0', 10);
+    const moduleIndex = parseInt(parts.pop() || '0', 10);
+    const courseId = parts.join('-'); // Rejoin in case courseId contains hyphens
+    
+    try {
+      // We need userId, but for chat purposes we'll get it from the request context
+      // For now, let's search across all users (this is a limitation we need to address)
+      const course = await this.courseRepository.findByIdAcrossUsers(courseId);
+      if (!course || !course.modules || !course.modules[moduleIndex]) {
+        return null;
+      }
+      
+      const module = course.modules[moduleIndex];
+      if (!module.lessons || !module.lessons[lessonIndex]) {
+        return null;
+      }
+      
+      return module.lessons[lessonIndex];
+    } catch (error) {
+      debugLog('Error getting lesson:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Get a course by ID (used by chat service)
+   */
+  async getCourse(courseId: string): Promise<Course | null> {
+    try {
+      // Search across all users for chat purposes
+      return await this.courseRepository.findByIdAcrossUsers(courseId);
+    } catch (error) {
+      debugLog('Error getting course:', error);
+      return null;
+    }
+  }
+
   async deleteCourse(userId: string, courseId: string): Promise<void> {
     debugLog(`Attempting to delete course with ID: ${courseId}`);
     

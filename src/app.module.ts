@@ -8,6 +8,7 @@ import { GenerationModule } from './generation/generation.module';
 import { CourseModule } from './course/course.module';
 import { AuthModule } from './auth/auth.module';
 import { DebugModule } from './debug/debug.module';
+import { ChatModule } from './chat/chat.module';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { DebugModule } from './debug/debug.module';
     CourseModule,
     AuthModule,
     DebugModule,
+    ChatModule,
   ],
   controllers: [],
   providers: [],
