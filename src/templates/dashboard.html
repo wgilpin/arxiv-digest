@@ -12,7 +12,7 @@
   {{NAVBAR}}
   
   <div class="min-h-screen bg-base-200">
-    <div class="container mx-auto p-4">
+    <div class="container mx-auto px-4 py-6 max-w-6xl">
       <h1 class="text-4xl font-bold text-center mb-8">ArXiv Learning Tool</h1>
       
       <div class="protected-content" style="display: none;">
@@ -22,16 +22,16 @@
             <h2 class="card-title text-2xl mb-4">Create New Course</h2>
             
             <!-- Tabs for different input methods -->
-            <div class="tabs tabs-boxed mb-4">
-              <a class="tab tab-active" id="arxivTab" onclick="showArxivForm()">ArXiv Paper</a>
-              <a class="tab" id="uploadTab" onclick="showUploadForm()">Upload PDF</a>
+            <div class="tabs tabs-boxed mb-4 flex-col sm:flex-row">
+              <a class="tab tab-active flex-1" id="arxivTab" onclick="showArxivForm()">ArXiv Paper</a>
+              <a class="tab flex-1" id="uploadTab" onclick="showUploadForm()">Upload PDF</a>
             </div>
             
             <!-- ArXiv Form -->
             <form id="courseForm" action="/" method="POST" class="form-control">
-              <div class="flex gap-4">
+              <div class="flex flex-col sm:flex-row gap-4">
                 <input type="text" name="arxivId" placeholder="Enter ArXiv ID (e.g., 1706.03762) or ArXiv URL" required class="input input-bordered flex-1">
-                <button type="submit" id="submitBtn" class="btn btn-primary">
+                <button type="submit" id="submitBtn" class="btn btn-primary w-full sm:w-auto">
                   <span id="submitText">Create Course</span>
                   <span id="loadingSpinner" class="loading loading-spinner loading-sm hidden"></span>
                 </button>
@@ -52,7 +52,7 @@
                 </label>
                 <input type="file" name="pdf" accept=".pdf" required class="file-input file-input-bordered w-full">
               </div>
-              <button type="submit" id="uploadBtn" class="btn btn-primary">
+              <button type="submit" id="uploadBtn" class="btn btn-primary w-full sm:w-auto">
                 <span id="uploadText">Create Course from PDF</span>
                 <span id="uploadSpinner" class="loading loading-spinner loading-sm hidden"></span>
               </button>

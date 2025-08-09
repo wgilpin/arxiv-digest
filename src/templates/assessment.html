@@ -9,12 +9,12 @@
   <link href="https://cdn.jsdelivr.net/npm/daisyui@5/themes.css" rel="stylesheet" type="text/css" />
 </head>
 <body>
-  <div class="min-h-screen flex items-center justify-center bg-base-200">
-    <div class="card w-128 bg-base-100 shadow-xl p-8">
-      <h1 class="text-2xl font-bold mb-4 text-center">Assess Concepts for: {{paperTitle}}</h1>
+  <div class="min-h-screen flex items-center justify-center bg-base-200 p-4">
+    <div class="card w-full max-w-4xl bg-base-100 shadow-xl p-4 sm:p-8">
+      <h1 class="text-xl sm:text-2xl font-bold mb-4 text-center break-words">Assess Concepts for: {{paperTitle}}</h1>
       <form id="assessmentForm" action="/{{courseId}}/assess" method="POST" class="form-control">
         {{conceptsHtml}}
-        <button type="submit" id="assessSubmitBtn" class="btn btn-primary mt-4">
+        <button type="submit" id="assessSubmitBtn" class="btn btn-primary mt-4 w-full sm:w-auto">
           <span id="assessSubmitText">Submit Assessment</span>
           <span id="assessLoadingSpinner" class="loading loading-spinner loading-sm hidden"></span>
         </button>

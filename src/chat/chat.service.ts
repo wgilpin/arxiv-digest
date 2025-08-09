@@ -130,7 +130,7 @@ export class ChatService {
 
       // Build conversation messages for the AI
       const messages = recentMessages.map(msg => ({
-        role: msg.role as 'user' | 'assistant',
+        role: msg.role,
         content: msg.content,
       }));
       
@@ -209,7 +209,7 @@ INSTRUCTIONS:
 
       // Build conversation messages for the AI
       const messages = recentMessages.map(msg => ({
-        role: msg.role as 'user' | 'assistant',
+        role: msg.role,
         content: msg.content,
       }));
       

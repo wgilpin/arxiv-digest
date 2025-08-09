@@ -122,6 +122,25 @@
         max-width: none;
         text-align: center;
       }
+      
+      /* Mobile-specific styles */
+      .container {
+        padding-left: 1rem;
+        padding-right: 1rem;
+      }
+      
+      .prose h1 { font-size: 1.75rem !important; }
+      .prose h2 { font-size: 1.5rem !important; }
+      .prose h3 { font-size: 1.25rem !important; }
+      
+      .lesson-figure {
+        margin: 1rem 0;
+      }
+      
+      .lesson-figure .figure-caption {
+        padding: 0 0.5rem;
+        font-size: 0.8rem;
+      }
     }
     
     /* Chat styles */
@@ -174,6 +193,13 @@
     .chat-input-area {
       display: flex;
       gap: 0.5rem;
+      flex-direction: column;
+    }
+    
+    @media (min-width: 640px) {
+      .chat-input-area {
+        flex-direction: row;
+      }
     }
     
     .chat-input {
@@ -181,6 +207,16 @@
       min-height: 3rem;
       max-height: 150px;
       resize: vertical;
+    }
+    
+    .chat-input-area button {
+      width: 100%;
+    }
+    
+    @media (min-width: 640px) {
+      .chat-input-area button {
+        width: auto;
+      }
     }
     
     .typing-indicator {
@@ -243,6 +279,15 @@
       cursor: pointer;
       font-size: 0.875rem;
       transition: background-color 0.2s;
+      flex: 1;
+      text-align: center;
+      min-width: 0;
+    }
+    
+    @media (max-width: 640px) {
+      .suggested-prompt {
+        flex-basis: 100%;
+      }
     }
     
     .suggested-prompt:hover {
@@ -253,20 +298,20 @@
 <body>
   {{NAVBAR}}
   
-  <div class="container mx-auto p-4">
+  <div class="container mx-auto px-4 py-6 max-w-4xl">
     <!-- Action buttons -->
-    <div class="flex gap-4 justify-center mb-4">
-      <a href="/courses/{{courseId}}" class="btn btn-primary" onclick="saveAccordionState(); return true;">Back to Course</a>
-      <form id="completeForm" action="/courses/lessons/{{lessonId}}/complete" method="POST" style="display: inline;">
-        <button type="submit" id="completeBtn" class="btn btn-success">
+    <div class="flex flex-col sm:flex-row gap-4 justify-center mb-4">
+      <a href="/courses/{{courseId}}" class="btn btn-primary order-2 sm:order-1" onclick="saveAccordionState(); return true;">Back to Course</a>
+      <form id="completeForm" action="/courses/lessons/{{lessonId}}/complete" method="POST" class="order-1 sm:order-2">
+        <button type="submit" id="completeBtn" class="btn btn-success w-full sm:w-auto">
           <span id="completeText">Mark as Complete</span>
           <span id="completeSpinner" class="loading loading-spinner loading-sm hidden"></span>
         </button>
       </form>
     </div>
 
-    <h1 class="text-3xl font-bold mb-4">{{lessonTitle}}</h1>
-    <div class="card bg-base-100 shadow-xl p-8">
+    <h1 class="text-2xl sm:text-3xl font-bold mb-4">{{lessonTitle}}</h1>
+    <div class="card bg-base-100 shadow-xl p-4 sm:p-8">
       <div class="prose max-w-none">
         {{lessonContent}}
         
@@ -332,11 +377,11 @@
     </div>
     
     <!-- Navigation buttons -->
-    <div class="lesson-nav-container flex justify-between items-center mb-4">
-      <div class="flex-1">
+    <div class="lesson-nav-container flex flex-col sm:flex-row justify-between items-center gap-4 mb-4">
+      <div class="w-full sm:flex-1 order-2 sm:order-1">
         {{previousLessonHtml}}
       </div>
-      <div class="flex-1 text-right">
+      <div class="w-full sm:flex-1 text-center sm:text-right order-1 sm:order-2">
         {{nextLessonHtml}}
       </div>
     </div>
