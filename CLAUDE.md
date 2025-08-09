@@ -107,3 +107,7 @@ PORT=3000  # Optional, defaults to 3000
 ## Development Guidelines
 
 - Do not add comments describing changes. Only add comments explaining current functionality.
+
+## Deployment Notes
+
+- Production is hosted in the Railway service.

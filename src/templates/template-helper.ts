@@ -10,7 +10,7 @@ export class TemplateHelper {
     const isDevelopment = process.env.NODE_ENV !== 'production';
     const baseDir = isDevelopment 
       ? path.join(process.cwd(), 'src', 'templates')
-      : __dirname;
+      : path.join(process.cwd(), 'dist', 'templates');
     const fullPath = path.join(baseDir, templatePath);
     let template = fs.readFileSync(fullPath, 'utf-8');
 
@@ -42,7 +42,7 @@ export class TemplateHelper {
       const isDevelopment = process.env.NODE_ENV !== 'production';
       const baseDir = isDevelopment 
         ? path.join(process.cwd(), 'src', 'templates')
-        : __dirname;
+        : path.join(process.cwd(), 'dist', 'templates');
       const fullPath = path.join(baseDir, componentPath);
       let component = fs.readFileSync(fullPath, 'utf-8');
 
