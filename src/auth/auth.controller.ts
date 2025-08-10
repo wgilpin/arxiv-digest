@@ -138,7 +138,7 @@ export class AuthController {
   }
 
   @Get('login')
-  async getLoginPage(@Res() res: Response) {
+  getLoginPage(@Res() res: Response): void {
     const loginHtml = `
 <!DOCTYPE html>
 <html lang="en" data-theme="light">
@@ -315,10 +315,10 @@ export class AuthController {
 
   @Get('me')
   @UseGuards(AuthGuard)
-  async getCurrentUser(@Req() req: AuthenticatedRequest) {
+  getCurrentUser(@Req() req: AuthenticatedRequest): { success: boolean; user: { uid: string; email?: string } } {
     return {
       success: true,
-      user: req.user,
+      user: req.user as { uid: string; email?: string },
     };
   }
 }

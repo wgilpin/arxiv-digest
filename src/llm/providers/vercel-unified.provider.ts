@@ -8,8 +8,8 @@ import { debugLog } from '../../common/debug-logger';
 @Injectable()
 export class VercelUnifiedProvider implements LLMProvider {
   name = 'vercel-unified';
-  private googleProvider: any;
-  private xaiProvider: any;
+  private googleProvider: ReturnType<typeof createGoogleGenerativeAI> | null = null;
+  private xaiProvider: ReturnType<typeof createXai> | null = null;
 
   constructor() {
     // Initialize providers with API keys if available

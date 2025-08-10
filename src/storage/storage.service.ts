@@ -44,7 +44,7 @@ export class FirebaseStorageService {
           reject(error);
         });
 
-        stream.on('finish', async () => {
+        stream.on('finish', () => void (async () => {
           try {
             // For image files, make them publicly accessible
             const isImage = /\.(png|jpg|jpeg|gif|webp)$/i.test(filePath);
@@ -73,7 +73,7 @@ export class FirebaseStorageService {
             this.logger.error(`Error finalizing upload for ${filePath}:`, error);
             reject(error instanceof Error ? error : new Error(String(error)));
           }
-        });
+        })());
 
         stream.end(buffer);
       });

@@ -280,8 +280,8 @@ export class PaperController {
       res.redirect(`/${courseId}/assess`);
     } catch (error) {
       console.error('=== ERROR in createCourse ===');
-      console.error('Error type:', error?.constructor?.name);
-      console.error('Error message:', error?.message);
+      console.error('Error type:', (error as Error)?.constructor?.name);
+      console.error('Error message:', (error as Error)?.message);
       console.error('Full error:', error);
       if (error instanceof Error) {
         console.error('Stack trace:', error.stack);

@@ -4,7 +4,6 @@ import { FirebaseStorageService } from '../storage/storage.service';
 import { LLMService } from '../llm/llm.service';
 import { FigureExtractionService } from '../figure-extraction/figure-extraction.service';
 import * as fs from 'fs';
-import * as path from 'path';
 import axios from 'axios';
 
 // Mock dependencies
@@ -17,10 +16,6 @@ const mockedFs = fs as jest.Mocked<typeof fs>;
 
 describe('ArxivService', () => {
   let service: ArxivService;
-  const testArxivId = '2301.00001';
-  const testCacheDir = './cache';
-  const testPdfCacheDir = path.join(testCacheDir, 'pdfs');
-  const testTextCacheDir = path.join(testCacheDir, 'text');
 
   beforeEach(async () => {
     // Reset all mocks
@@ -118,7 +113,7 @@ describe('ArxivService', () => {
       ];
 
       testCases.forEach((arxivId) => {
-        const result = (service as any).extractArxivId(arxivId);
+        const result = (service as ArxivService & { extractArxivId: (input: string) => string }).extractArxivId(arxivId);
         expect(result).toBe(arxivId);
       });
     });

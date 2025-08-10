@@ -12,12 +12,12 @@ export class AuthService {
         
         if (process.env.FIREBASE_SERVICE_ACCOUNT) {
           // Use service account key from environment variable (production)
-          const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
-          debugLog('Service account project_id:', serviceAccount.project_id);
+          const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT) as { project_id?: string; projectId?: string } & admin.ServiceAccount;
+          debugLog('Service account project_id:', serviceAccount.project_id || serviceAccount.projectId);
           
           admin.initializeApp({
             credential: admin.credential.cert(serviceAccount),
-            projectId: serviceAccount.project_id, // Use project_id from service account
+            projectId: (serviceAccount.project_id || serviceAccount.projectId) as string, // Use project_id from service account
           });
           debugLog('Firebase Admin initialized with service account');
         } else {
@@ -41,8 +41,8 @@ export class AuthService {
       return decodedToken;
     } catch (error) {
       console.error('Error details:', {
-        code: error.code,
-        message: error.message
+        code: (error as { code?: string }).code,
+        message: (error as Error).message
       });
       throw new Error('Invalid token');
     }
@@ -51,7 +51,7 @@ export class AuthService {
   async getUser(uid: string): Promise<admin.auth.UserRecord> {
     try {
       return await admin.auth().getUser(uid);
-    } catch (error) {
+    } catch {
       throw new Error('User not found');
     }
   }
@@ -59,7 +59,7 @@ export class AuthService {
   async createCustomToken(uid: string): Promise<string> {
     try {
       return await admin.auth().createCustomToken(uid);
-    } catch (error) {
+    } catch {
       throw new Error('Failed to create custom token');
     }
   }
@@ -67,7 +67,7 @@ export class AuthService {
   async deleteUser(uid: string): Promise<void> {
     try {
       await admin.auth().deleteUser(uid);
-    } catch (error) {
+    } catch {
       throw new Error('Failed to delete user');
     }
   }
@@ -99,17 +99,17 @@ export class AuthService {
       debugLog('Firebase token endpoint response status:', response.status);
 
       if (!response.ok) {
-        let errorData: any;
+        let errorData: { error?: { message?: string }; message?: string };
         try {
-          errorData = await response.json();
-        } catch (parseError) {
+          errorData = await response.json() as { error?: { message?: string }; message?: string };
+        } catch {
           errorData = { message: 'Failed to parse error response' };
         }
         debugLog('Token refresh failed with status:', response.status, 'error:', errorData);
         throw new Error(`Failed to refresh token: ${response.status} ${errorData.error?.message || 'Unknown error'}`);
       }
 
-      const data = await response.json();
+      const data = await response.json() as { id_token?: string; refresh_token?: string };
       debugLog('Token refresh successful');
       
       if (!data.id_token || !data.refresh_token) {
@@ -122,7 +122,7 @@ export class AuthService {
       };
     } catch (error) {
       console.error('Error refreshing token:', error);
-      throw new Error(`Failed to refresh token: ${error.message}`);
+      throw new Error(`Failed to refresh token: ${(error as Error).message}`);
     }
   }
 }

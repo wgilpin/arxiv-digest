@@ -1,12 +1,12 @@
-import { Injectable, CanActivate, ExecutionContext, UnauthorizedException, ForbiddenException } from '@nestjs/common';
+import { Injectable, CanActivate, ExecutionContext, UnauthorizedException } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { Response } from 'express';
 import { debugLog } from '../common/debug-logger';
 
 interface AuthenticatedRequest {
-  user?: any;
-  cookies?: any;
-  headers?: any;
+  user?: { uid: string; email?: string };
+  cookies?: { [key: string]: string | undefined };
+  headers?: { [key: string]: string | undefined };
 }
 
 @Injectable()
@@ -27,7 +27,7 @@ export class AuthGuard implements CanActivate {
       const decodedToken = await this.authService.verifyIdToken(token);
       request.user = decodedToken;
       return true;
-    } catch (_) {
+    } catch {
       
       // Try to refresh the token using refresh token from cookie
       const refreshToken = this.extractRefreshTokenFromCookie(request);
@@ -62,16 +62,16 @@ export class AuthGuard implements CanActivate {
     }
   }
 
-  private extractTokenFromCookie(request: any): string | undefined {
+  private extractTokenFromCookie(request: AuthenticatedRequest): string | undefined {
     return request.cookies?.authToken;
   }
 
-  private extractRefreshTokenFromCookie(request: any): string | undefined {
+  private extractRefreshTokenFromCookie(request: AuthenticatedRequest): string | undefined {
     return request.cookies?.refreshToken;
   }
 
-  private extractTokenFromHeader(request: any): string | undefined {
-    const [type, token] = request.headers.authorization?.split(' ') ?? [];
+  private extractTokenFromHeader(request: AuthenticatedRequest): string | undefined {
+    const [type, token] = (request.headers?.authorization)?.split(' ') ?? [];
     return type === 'Bearer' ? token : undefined;
   }
 }

@@ -1,3 +1,4 @@
+/* eslint-disable no-useless-escape */
 import { Injectable } from '@nestjs/common';
 import { FirestoreService } from '../firestore/firestore.service';
 import { CourseService } from '../course/course/course.service';
@@ -163,14 +164,14 @@ export class ChatService {
       const recentMessages = chatHistory.slice(-this.MAX_CONTEXT_MESSAGES);
 
       // Build conversation messages for the AI
-      const messages = recentMessages.map(msg => ({
+      const messages: Array<{ role: 'user' | 'assistant'; content: string; metadata?: any }> = recentMessages.map(msg => ({
         role: msg.role,
         content: msg.content,
         metadata: msg.metadata,
       }));
       
       // Add the new user message
-      messages.push({ role: 'user' as const, content: message, metadata: undefined });
+      messages.push({ role: 'user' as const, content: message });
 
       // Determine if we're in exercise mode (evaluating an answer)
       const lastAssistantMessage = [...recentMessages].reverse().find(m => m.role === 'assistant');

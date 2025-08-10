@@ -1,3 +1,15 @@
+ 
+ 
+ 
+ 
+ 
+ 
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
+ 
+ 
+ 
+ 
+ 
 import { Test, TestingModule } from '@nestjs/testing';
 import { AuthService } from './auth.service';
 import * as admin from 'firebase-admin';

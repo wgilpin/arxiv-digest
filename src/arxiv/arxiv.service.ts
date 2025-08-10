@@ -37,13 +37,13 @@ export class ArxivService {
       const htmlUrl = `https://arxiv.org/html/${arxivId}v1`;
       const response = await axios.head(htmlUrl, { timeout: 10000 });
       return response.status === 200;
-    } catch (error) {
+    } catch {
       // If v1 doesn't work, try without version suffix
       try {
         const htmlUrl = `https://arxiv.org/html/${arxivId}`;
         const response = await axios.head(htmlUrl, { timeout: 10000 });
         return response.status === 200;
-      } catch (error) {
+      } catch {
         // No HTML version available
         return false;
       }
@@ -274,13 +274,13 @@ export class ArxivService {
         
         try {
           response = await axios.get(htmlUrl, { timeout: 30000 });
-        } catch (error) {
+        } catch {
           // Try without version suffix
           htmlUrl = `https://arxiv.org/html/${arxivId}`;
           response = await axios.get(htmlUrl, { timeout: 30000 });
         }
 
-        rawHtml = response.data;
+        rawHtml = response.data as string;
         debugLog(`Downloaded HTML content for ArXiv ID: ${arxivId}`);
         
         // Extract text from HTML
@@ -449,13 +449,13 @@ Return the cleaned, structured text that would be suitable for further analysis.
         
         try {
           response = await axios.get(htmlUrl, { timeout: 30000 });
-        } catch (error) {
+        } catch {
           htmlUrl = `https://arxiv.org/html/${arxivId}`;
           response = await axios.get(htmlUrl, { timeout: 30000 });
         }
         
         const figureResult = await this.figureExtractionService.extractFigures(arxivId, {
-          htmlContent: response.data,
+          htmlContent: response.data as string,
           storeImages: true,
         });
         
@@ -535,7 +535,7 @@ Return the cleaned, structured text that would be suitable for further analysis.
       return result.content;
     } catch (error) {
       console.error('Error extracting text from uploaded PDF:', error);
-      throw new Error(`Failed to extract text from PDF: ${error.message}`);
+      throw new Error(`Failed to extract text from PDF: ${(error as Error).message}`);
     }
   }
 }

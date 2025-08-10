@@ -1,3 +1,6 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
+/* eslint-disable @typescript-eslint/no-unsafe-argument */
+/* eslint-disable @typescript-eslint/await-thenable */
 import { Test, TestingModule } from '@nestjs/testing';
 import { Response } from 'express';
 import { HttpStatus } from '@nestjs/common';

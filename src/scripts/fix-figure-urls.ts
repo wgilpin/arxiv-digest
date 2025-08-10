@@ -3,6 +3,23 @@ import { AppModule } from '../app.module';
 import { FirebaseStorageService } from '../storage/storage.service';
 import { FirestoreService } from '../firestore/firestore.service';
 
+interface Figure {
+  imageUrl?: string;
+}
+
+interface Lesson {
+  figures?: Figure[];
+}
+
+interface Module {
+  lessons?: Lesson[];
+}
+
+interface Course {
+  figures?: Figure[];
+  modules?: Module[];
+}
+
 /**
  * Script to fix figure URLs by making them publicly accessible
  */
@@ -23,7 +40,7 @@ async function fixFigureUrls() {
     let fixedFigures = 0;
 
     for (const courseDoc of coursesSnapshot.docs) {
-      const course = courseDoc.data();
+      const course = courseDoc.data() as Course;
       const courseId = courseDoc.id;
       let courseUpdated = false;
 
@@ -74,7 +91,7 @@ async function fixFigureUrls() {
 
       // Update the course if any figures were fixed
       if (courseUpdated) {
-        await courseDoc.ref.update(course);
+        await courseDoc.ref.update(course as any);
         console.log(`Updated course ${courseId} with fixed figure URLs`);
       }
     }

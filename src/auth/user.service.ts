@@ -1,5 +1,5 @@
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
+ 
+ 
 import { Injectable } from '@nestjs/common';
 import { UserRepository } from '../data/repositories/user.repository';
 import { User } from '../firestore/interfaces/firestore.interfaces';
@@ -10,7 +10,7 @@ export class UserService {
     private userRepository: UserRepository,
   ) {}
 
-  async findOrCreateUser(firebaseUser: any): Promise<User> {
+  async findOrCreateUser(firebaseUser: { uid: string; email?: string; name?: string; displayName?: string; picture?: string; photoURL?: string }): Promise<User> {
     const user = await this.userRepository.findByUid(firebaseUser.uid);
 
     if (!user) {

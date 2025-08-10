@@ -1,3 +1,9 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
+/* eslint-disable @typescript-eslint/no-unsafe-argument */
+ 
+ 
+ 
+ 
 import { Test, TestingModule } from '@nestjs/testing';
 import { CourseController } from './course.controller';
 import { CourseService } from './course.service';

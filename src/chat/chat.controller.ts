@@ -11,9 +11,10 @@ import {
   HttpException,
   HttpStatus 
 } from '@nestjs/common';
-import { Response, Request } from 'express';
+import { Response } from 'express';
 import { ChatService } from './chat.service';
 import { AuthGuard } from '../auth/auth.guard';
+import { AuthenticatedRequest } from '../common/types/auth.types';
 import { debugLog } from '../common/debug-logger';
 
 @Controller('api/chat')
@@ -27,11 +28,11 @@ export class ChatController {
   @Post('stream')
   async streamChat(
     @Body() body: { lessonId: string; courseId: string; message: string },
-    @Req() req: Request,
+    @Req() req: AuthenticatedRequest,
     @Res() res: Response,
   ) {
     try {
-      const userId = (req as any).user?.uid;
+      const userId = req.user?.uid;
       if (!userId) {
         throw new HttpException('User not authenticated', HttpStatus.UNAUTHORIZED);
       }
@@ -100,10 +101,10 @@ export class ChatController {
   @Post('save-assistant-message')
   async saveAssistantMessage(
     @Body() body: { lessonId: string; courseId: string; content: string; metadata?: any },
-    @Req() req: Request,
+    @Req() req: AuthenticatedRequest,
   ) {
     try {
-      const userId = (req as any).user?.uid;
+      const userId = req.user?.uid;
       if (!userId) {
         throw new HttpException('User not authenticated', HttpStatus.UNAUTHORIZED);
       }
@@ -151,10 +152,10 @@ export class ChatController {
   @Get('history/:lessonId')
   async getChatHistory(
     @Param('lessonId') lessonId: string,
-    @Req() req: Request,
+    @Req() req: AuthenticatedRequest,
   ) {
     try {
-      const userId = (req as any).user?.uid;
+      const userId = req.user?.uid;
       if (!userId) {
         throw new HttpException('User not authenticated', HttpStatus.UNAUTHORIZED);
       }
@@ -176,10 +177,10 @@ export class ChatController {
   @Delete('history/:lessonId')
   async clearChatHistory(
     @Param('lessonId') lessonId: string,
-    @Req() req: Request,
+    @Req() req: AuthenticatedRequest,
   ) {
     try {
-      const userId = (req as any).user?.uid;
+      const userId = req.user?.uid;
       if (!userId) {
         throw new HttpException('User not authenticated', HttpStatus.UNAUTHORIZED);
       }
@@ -201,10 +202,10 @@ export class ChatController {
   @Post('clear')
   async clearChat(
     @Body() body: { lessonId: string; courseId: string },
-    @Req() req: Request,
+    @Req() req: AuthenticatedRequest,
   ) {
     try {
-      const userId = (req as any).user?.uid;
+      const userId = req.user?.uid;
       if (!userId) {
         throw new HttpException('User not authenticated', HttpStatus.UNAUTHORIZED);
       }
@@ -233,10 +234,10 @@ export class ChatController {
   @Post('message')
   async sendMessage(
     @Body() body: { lessonId: string; courseId: string; message: string },
-    @Req() req: Request,
+    @Req() req: AuthenticatedRequest,
   ) {
     try {
-      const userId = (req as any).user?.uid;
+      const userId = req.user?.uid;
       if (!userId) {
         throw new HttpException('User not authenticated', HttpStatus.UNAUTHORIZED);
       }
