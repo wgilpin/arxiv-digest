@@ -44,6 +44,11 @@ export class ChatController {
 
       debugLog(`Streaming chat for lesson ${lessonId}, user ${userId}`);
 
+      // Check if this is an exercise request
+      const isExerciseRequest = message.toLowerCase().includes('exercise') || 
+                                message.toLowerCase().includes('quiz') ||
+                                message.toLowerCase().includes('test my');
+      
       // Save user message
       await this.chatService.saveChatMessage({
         lessonId,
@@ -51,6 +56,7 @@ export class ChatController {
         userId,
         content: message,
         role: 'user',
+        metadata: isExerciseRequest ? { isExerciseRequest: true } : undefined,
       });
 
       // Get the stream from the chat service
@@ -93,7 +99,7 @@ export class ChatController {
    */
   @Post('save-assistant-message')
   async saveAssistantMessage(
-    @Body() body: { lessonId: string; courseId: string; content: string },
+    @Body() body: { lessonId: string; courseId: string; content: string; metadata?: any },
     @Req() req: Request,
   ) {
     try {
@@ -102,10 +108,22 @@ export class ChatController {
         throw new HttpException('User not authenticated', HttpStatus.UNAUTHORIZED);
       }
 
-      const { lessonId, courseId, content } = body;
+      const { lessonId, courseId, content, metadata } = body;
       
       if (!lessonId || !courseId || !content) {
         throw new HttpException('Missing required fields', HttpStatus.BAD_REQUEST);
+      }
+
+      // Detect if this is an exercise question (contains typical exercise prompts)
+      const isExerciseQuestion = content.includes('What is your answer?') ||
+                                  content.includes('Can you solve') ||
+                                  content.includes('Try to answer') ||
+                                  content.includes('Test your understanding');
+      
+      const messageMetadata = metadata || {};
+      if (isExerciseQuestion) {
+        messageMetadata.exerciseState = 'question';
+        messageMetadata.isExerciseResponse = true;
       }
 
       const message = await this.chatService.saveChatMessage({
@@ -114,6 +132,7 @@ export class ChatController {
         userId,
         content,
         role: 'assistant',
+        metadata: Object.keys(messageMetadata).length > 0 ? messageMetadata : undefined,
       });
 
       return { success: true, message };

@@ -190,6 +190,47 @@
       border: 1px solid #e5e7eb;
     }
     
+    /* Exercise-specific styles */
+    .chat-message.exercise-question .chat-message-content {
+      background-color: #fef3c7;
+      border: 2px solid #f59e0b;
+      position: relative;
+    }
+    
+    .chat-message.exercise-question::before {
+      content: '🎯 Exercise';
+      position: absolute;
+      top: -0.5rem;
+      left: 1rem;
+      background-color: #f59e0b;
+      color: white;
+      padding: 0.25rem 0.5rem;
+      border-radius: 0.25rem;
+      font-size: 0.75rem;
+      font-weight: bold;
+    }
+    
+    .chat-message.exercise-evaluation .chat-message-content {
+      background-color: #f0fdf4;
+      border: 2px solid #10b981;
+    }
+    
+    .chat-message.exercise-hint .chat-message-content {
+      background-color: #fef3c7;
+      border: 2px solid #f59e0b;
+    }
+    
+    .exercise-prompt {
+      background-color: #f59e0b !important;
+      color: white !important;
+      border-color: #f59e0b !important;
+    }
+    
+    .exercise-prompt:hover {
+      background-color: #d97706 !important;
+      border-color: #d97706 !important;
+    }
+    
     .chat-input-area {
       display: flex;
       gap: 0.5rem;
@@ -341,6 +382,9 @@
           </button>
           <button class="suggested-prompt" onclick="sendSuggestedPrompt('Can you provide an example?')">
             Provide an example
+          </button>
+          <button class="suggested-prompt exercise-prompt" onclick="sendSuggestedPrompt('Give me an exercise to test my understanding')">
+            🎯 Test my knowledge
           </button>
         </div>
         
@@ -601,7 +645,7 @@
         // Remove typing indicator
         typingIndicator.remove();
         
-        // Create assistant message element
+        // Create assistant message element (will be styled properly once content is streamed)
         const assistantMessageEl = addMessageToChat('', 'assistant');
         const contentEl = assistantMessageEl.querySelector('.chat-message-content');
         currentAssistantMessage = '';
@@ -628,11 +672,31 @@
         // After streaming is complete, render markdown and MathJax
         contentEl.innerHTML = marked.parse(currentAssistantMessage);
         
+        // Apply exercise styling if needed
+        if (currentAssistantMessage.includes('What is your answer?') || 
+            currentAssistantMessage.includes('Can you solve') || 
+            currentAssistantMessage.includes('Try to answer')) {
+          assistantMessageEl.classList.add('exercise-question');
+        } else if (currentAssistantMessage.includes('hint:') || 
+                   currentAssistantMessage.includes('Try again') || 
+                   currentAssistantMessage.includes('Not quite')) {
+          assistantMessageEl.classList.add('exercise-hint');
+        } else if (currentAssistantMessage.includes('Correct!') || 
+                   currentAssistantMessage.includes('Well done!') || 
+                   currentAssistantMessage.includes('Excellent!')) {
+          assistantMessageEl.classList.add('exercise-evaluation');
+        }
+        
         // Process MathJax
         processMathJax(contentEl);
         
         // Save assistant message to backend (only if we have content)
         if (currentAssistantMessage && currentAssistantMessage.trim()) {
+          // Detect if this is an exercise response
+          const isExerciseQuestion = currentAssistantMessage.includes('What is your answer?') ||
+                                      currentAssistantMessage.includes('Can you solve') ||
+                                      currentAssistantMessage.includes('Try to answer');
+          
           await fetch('/api/chat/save-assistant-message', {
             method: 'POST',
             headers: {
@@ -641,7 +705,8 @@
             body: JSON.stringify({
               lessonId,
               courseId,
-              content: currentAssistantMessage.trim()
+              content: currentAssistantMessage.trim(),
+              metadata: isExerciseQuestion ? { exerciseState: 'question', isExerciseResponse: true } : undefined
             })
           });
         }
@@ -661,7 +726,7 @@
       }
     }
     
-    function addMessageToChat(content, role) {
+    function addMessageToChat(content, role, metadata = {}) {
       const messagesContainer = document.getElementById('chatMessages');
       
       // Remove empty state message if it exists
@@ -672,6 +737,29 @@
       
       const messageDiv = document.createElement('div');
       messageDiv.className = `chat-message ${role}`;
+      
+      // Add exercise-specific classes based on content or metadata
+      if (role === 'assistant') {
+        // Check if this is an exercise question
+        if (content.includes('What is your answer?') || 
+            content.includes('Can you solve') || 
+            content.includes('Try to answer') ||
+            metadata.exerciseState === 'question') {
+          messageDiv.classList.add('exercise-question');
+        }
+        // Check if this is an evaluation with hints
+        else if (content.includes('hint:') || 
+                 content.includes('Try again') || 
+                 content.includes('Not quite')) {
+          messageDiv.classList.add('exercise-hint');
+        }
+        // Check if this is a success evaluation
+        else if (content.includes('Correct!') || 
+                 content.includes('Well done!') || 
+                 content.includes('Excellent!')) {
+          messageDiv.classList.add('exercise-evaluation');
+        }
+      }
       
       const contentDiv = document.createElement('div');
       contentDiv.className = 'chat-message-content';
