@@ -9,6 +9,7 @@ import { CourseModule } from './course/course.module';
 import { AuthModule } from './auth/auth.module';
 import { DebugModule } from './debug/debug.module';
 import { ChatModule } from './chat/chat.module';
+import { TTSModule } from './tts/tts.module';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { ChatModule } from './chat/chat.module';
     AuthModule,
     DebugModule,
     ChatModule,
+    TTSModule,
   ],
   controllers: [],
   providers: [],

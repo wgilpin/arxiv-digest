@@ -58,3 +58,4 @@ database.sqlite
 package-lock.json
 cache/
 .claude/settings.local.json
+/credentials/digest-370eb-1f858ca9b06e.json

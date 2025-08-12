@@ -46,15 +46,15 @@ export class FirebaseStorageService {
 
         stream.on('finish', () => void (async () => {
           try {
-            // For image files, make them publicly accessible
-            const isImage = /\.(png|jpg|jpeg|gif|webp)$/i.test(filePath);
+            // For image and audio files, make them publicly accessible
+            const isPublicFile = /\.(png|jpg|jpeg|gif|webp|mp3|wav|ogg)$/i.test(filePath);
             
-            if (isImage) {
+            if (isPublicFile) {
               try {
                 // Make the file publicly accessible
                 await file.makePublic();
                 const publicUrl = `https://storage.googleapis.com/${this.bucketName}/${filePath}`;
-                this.logger.log(`Successfully uploaded public image: ${filePath}`);
+                this.logger.log(`Successfully uploaded public file: ${filePath}`);
                 resolve(publicUrl);
               } catch (publicError) {
                 // If making public fails, just return the storage URL
@@ -64,10 +64,17 @@ export class FirebaseStorageService {
                 resolve(publicUrl);
               }
             } else {
-              // For non-image files, just return a simple URL (skip signed URL generation for now)
-              const publicUrl = `https://storage.googleapis.com/${this.bucketName}/${filePath}`;
-              this.logger.log(`Successfully uploaded file: ${filePath}`);
-              resolve(publicUrl);
+              // For other files, try to make them public anyway
+              try {
+                await file.makePublic();
+                const publicUrl = `https://storage.googleapis.com/${this.bucketName}/${filePath}`;
+                this.logger.log(`Successfully uploaded file: ${filePath}`);
+                resolve(publicUrl);
+              } catch (publicError) {
+                this.logger.warn(`Could not make file public, using storage URL: ${filePath}`, publicError);
+                const publicUrl = `https://storage.googleapis.com/${this.bucketName}/${filePath}`;
+                resolve(publicUrl);
+              }
             }
           } catch (error) {
             this.logger.error(`Error finalizing upload for ${filePath}:`, error);
@@ -135,9 +142,9 @@ export class FirebaseStorageService {
   async getPublicUrl(filePath: string): Promise<string> {
     try {
       const file = this.storage.bucket(this.bucketName).file(filePath);
-      const isImage = /\.(png|jpg|jpeg|gif|webp)$/i.test(filePath);
+      const isPublicFile = /\.(png|jpg|jpeg|gif|webp|mp3|wav|ogg)$/i.test(filePath);
       
-      if (isImage) {
+      if (isPublicFile) {
         try {
           // Try to ensure the file is public
           await file.makePublic();
@@ -147,7 +154,12 @@ export class FirebaseStorageService {
         }
         return `https://storage.googleapis.com/${this.bucketName}/${filePath}`;
       } else {
-        // For non-image files, just return the storage URL
+        // For other files, try to make them public and return the storage URL
+        try {
+          await file.makePublic();
+        } catch (error) {
+          this.logger.warn(`Could not make file public: ${filePath}`, error);
+        }
         return `https://storage.googleapis.com/${this.bucketName}/${filePath}`;
       }
     } catch (error) {
@@ -254,6 +266,21 @@ export class FirebaseStorageService {
         return 'text/plain';
       case 'json':
         return 'application/json';
+      case 'mp3':
+        return 'audio/mpeg';
+      case 'wav':
+        return 'audio/wav';
+      case 'ogg':
+        return 'audio/ogg';
+      case 'png':
+        return 'image/png';
+      case 'jpg':
+      case 'jpeg':
+        return 'image/jpeg';
+      case 'gif':
+        return 'image/gif';
+      case 'webp':
+        return 'image/webp';
       default:
         return 'application/octet-stream';
     }

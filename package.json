@@ -27,6 +27,7 @@
     "@ai-sdk/openai": "^2.0.7",
     "@ai-sdk/xai": "^2.0.3",
     "@google-cloud/firestore": "^7.11.3",
+    "@google-cloud/text-to-speech": "^6.2.0",
     "@google/generative-ai": "^0.24.1",
     "@nestjs/common": "^11.0.1",
     "@nestjs/config": "^4.0.2",
